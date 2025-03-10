@@ -8,5 +8,5 @@ export type SplitFileOptions = (
       partSize: number;
     }
 ) & {
-  checksum?: 'none' | 'file' | 'merge';
+  createChecksum?: boolean;
 };

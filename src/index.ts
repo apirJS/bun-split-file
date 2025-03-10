@@ -2,6 +2,13 @@ import path from 'node:path';
 import type { SplitFileOptions } from './types';
 import { readdir } from 'node:fs/promises';
 
+function formatPartIndex(index: number): string {
+  const indexStr = `${index}`;
+  return `${'0'.repeat(
+    (indexStr.length <= 3 ? 3 : indexStr.length) - indexStr.length
+  )}${indexStr}`;
+}
+
 /**
  * Splits a file into multiple parts based on the provided options.
  *
@@ -27,19 +34,58 @@ export async function splitFile(
     }
 
     const readStream: ReadableStream<Uint8Array> = file.stream();
-    const fileName = path.basename(inputFilePath);
+    const fileInfo = path.parse(inputFilePath);
+    const fileName = fileInfo.name;
+    const fileExt = fileInfo.ext;
+    const fileSize = file.size;
     const hasher = new Bun.CryptoHasher('sha256');
 
     if (options.splitBy === 'number') {
-      const partSize = file.size / options.parts;
-      const lastPartSize = partSize + (file.size % options.parts);
+      if (options.parts < 1) {
+        throw new Error('Number of parts was to small');
+      }
+
+      let totalPart = 1;
+      const partSize = fileSize / options.parts;
+      const partName = `${fileName}.${fileExt}.${formatPartIndex(totalPart)}`;
+
+      let partPath = path.join(outputPath, partName);
+      let writer = Bun.file(partPath).writer();
+      let currentSize = 0;
+      let totalSize = 0;
 
       if (partSize < 1) {
         throw new Error(`Number of parts is too large`);
       }
 
       for await (const chunk of readStream) {
-        const partName = `${fileName}`
+        let chunkOffset = 0;
+        hasher.update(chunk);
+
+        while (chunkOffset < chunk.length) {
+          const spaceLeft = partSize - currentSize;
+          const bytesToWrite = Math.min(spaceLeft, chunk.length - chunkOffset);
+
+          writer.write(chunk.subarray(chunkOffset, chunkOffset + bytesToWrite));
+          currentSize += bytesToWrite;
+          totalSize += bytesToWrite;
+          chunkOffset += bytesToWrite;
+
+          if (currentSize >= partSize) {
+            await writer.flush();
+            await writer.end();
+            if (totalSize < fileSize) {
+              // partIndex++;
+              // partPath = path.join(
+              //   outputPath,
+              //   `${fileName}.part_${partIndex}`
+              // );
+              // writer = Bun.file(currentFile).writer();
+              // currentSize = 0;
+              totalPart += 1;
+            }
+          }
+        }
       }
     } else {
       //
