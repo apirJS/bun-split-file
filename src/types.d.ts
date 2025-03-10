@@ -8,6 +8,5 @@ export type SplitFileOptions = (
       partSize: number;
     }
 ) & {
-  suffix?: string;
   checksum?: 'none' | 'file' | 'merge';
 };

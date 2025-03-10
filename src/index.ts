@@ -1,4 +1,6 @@
+import path from 'node:path';
 import type { SplitFileOptions } from './types';
+import { readdir } from 'node:fs/promises';
 
 /**
  * Splits a file into multiple parts based on the provided options.
@@ -13,7 +15,43 @@ export async function splitFile(
   outputPath: string,
   options: SplitFileOptions
 ): Promise<void> {
-  // Function implementation
+  try {
+    const file = Bun.file(inputFilePath);
+
+    if (!(await file.exists())) {
+      throw new Error("File doesn't exists!");
+    }
+
+    if (file.size === 0) {
+      throw new Error('File is empty!');
+    }
+
+    const readStream: ReadableStream<Uint8Array> = file.stream();
+    const fileName = path.basename(inputFilePath);
+    const hasher = new Bun.CryptoHasher('sha256');
+
+    if (options.splitBy === 'number') {
+      const partSize = file.size / options.parts;
+      const lastPartSize = partSize + (file.size % options.parts);
+
+      if (partSize < 1) {
+        throw new Error(`Number of parts is too large`);
+      }
+
+      for await (const chunk of readStream) {
+        const partName = `${fileName}`
+      }
+    } else {
+      //
+    }
+  } catch (error) {
+    throw new Error(
+      `Failed to split the file: ${
+        error instanceof Error ? error.message : 'Unknown error'
+      }`,
+      { cause: error }
+    );
+  }
 }
 
 /**
