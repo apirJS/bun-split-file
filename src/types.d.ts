@@ -9,4 +9,5 @@ export type SplitFileOptions = (
     }
 ) & {
   createChecksum?: boolean;
+  floatingPartSizeHandling?: 'distribute' | 'padding';
 };

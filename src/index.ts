@@ -40,55 +40,67 @@ export async function splitFile(
     const fileSize = file.size;
     const hasher = new Bun.CryptoHasher('sha256');
 
+    let currentPart = 1;
+    let partSize: number;
+
     if (options.splitBy === 'number') {
       if (options.parts < 1) {
         throw new Error('Number of parts was to small');
       }
 
-      let totalPart = 1;
-      const partSize = fileSize / options.parts;
-      const partName = `${fileName}.${fileExt}.${formatPartIndex(totalPart)}`;
-
-      let partPath = path.join(outputPath, partName);
-      let writer = Bun.file(partPath).writer();
-      let currentSize = 0;
-      let totalSize = 0;
-
-      if (partSize < 1) {
-        throw new Error(`Number of parts is too large`);
+      partSize = Math.round(fileSize / options.parts);
+    } else {
+      if (options.partSize > fileSize) {
+        throw new Error(
+          `Part size bigger than file size: part size ${options.partSize} > file size ${fileSize}`
+        );
       }
 
-      for await (const chunk of readStream) {
-        let chunkOffset = 0;
-        hasher.update(chunk);
+      if (options.partSize <= 0) {
+        throw new Error('Part size cannot be negative or zero');
+      }
 
-        while (chunkOffset < chunk.length) {
-          const spaceLeft = partSize - currentSize;
-          const bytesToWrite = Math.min(spaceLeft, chunk.length - chunkOffset);
+      partSize = options.partSize;
+    }
 
-          writer.write(chunk.subarray(chunkOffset, chunkOffset + bytesToWrite));
-          currentSize += bytesToWrite;
-          totalSize += bytesToWrite;
-          chunkOffset += bytesToWrite;
+    const partName = `${fileName}.${fileExt}.${formatPartIndex(currentPart)}`;
+    let partPath = path.join(outputPath, partName);
+    let writer = Bun.file(partPath).writer();
+    let currentSize = 0;
+    let totalSize = 0;
 
-          if (currentSize >= partSize) {
-            await writer.flush();
-            await writer.end();
-            if (totalSize < fileSize) {
-              // partIndex++;
-              // partPath = path.join(
-              //   outputPath,
-              //   `${fileName}.part_${partIndex}`
-              // );
-              // writer = Bun.file(currentFile).writer();
-              // currentSize = 0;
-              totalPart += 1;
-            }
+    if (partSize < 1) {
+      throw new Error(`Number of parts is too large`);
+    }
+
+    for await (const chunk of readStream) {
+      let chunkOffset = 0;
+      hasher.update(chunk);
+
+      while (chunkOffset < chunk.length) {
+        const spaceLeft = partSize - currentSize;
+        const bytesToWrite = Math.min(spaceLeft, chunk.length - chunkOffset);
+
+        writer.write(chunk.subarray(chunkOffset, chunkOffset + bytesToWrite));
+        currentSize += bytesToWrite;
+        totalSize += bytesToWrite;
+        chunkOffset += bytesToWrite;
+
+        if (currentSize >= partSize) {
+          await writer.flush();
+          await writer.end();
+          if (totalSize < fileSize) {
+            // partIndex++;
+            // partPath = path.join(
+            //   outputPath,
+            //   `${fileName}.part_${partIndex}`
+            // );
+            // writer = Bun.file(currentFile).writer();
+            // currentSize = 0;
+            currentPart += 1;
           }
         }
       }
-    } else {
-      //
     }
   } catch (error) {
     throw new Error(
