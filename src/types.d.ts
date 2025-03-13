@@ -1,3 +1,5 @@
+import type { SupportedCryptoAlgorithms } from 'bun';
+
 export type SplitFileOptions = (
   | {
       splitBy: 'number';
@@ -8,6 +10,7 @@ export type SplitFileOptions = (
       partSize: number;
     }
 ) & {
-  createChecksum?: boolean;
-  floatingPartSizeHandling?: 'distribute' | 'padding';
+  createChecksum?: boolean | SupportedCryptoAlgorithms;
+  floatingPartSizeHandling?: 'distribute' | 'createNewFile';
+  deleteFileAfterSplit?: boolean;
 };
