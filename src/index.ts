@@ -1,5 +1,6 @@
 import path from 'node:path';
 import type { SplitFileOptions } from './types';
+import { mkdir, exists } from 'node:fs/promises';
 
 function formatPartIndex(index: number): string {
   const indexStr = `${index}`;
@@ -15,10 +16,19 @@ function isFloat(x: number): boolean {
 /**
  * Splits a file into multiple parts based on the provided options.
  *
- * @param {string} inputFilePath - Path to the input file.
+ * @param {string} inputFilePath - Path to the input file to be split.
  * @param {string} outputPath - Directory where the output files will be saved.
  * @param {SplitFileOptions} options - Configuration options for splitting the file.
+ * @param {('number'|'size')} options.splitBy - Determines whether to split by number of parts or by part size.
+ * @param {number} [options.numberOfParts] - Required when splitBy is 'number'. Specifies how many parts the file will be split into.
+ * @param {number} [options.partSize] - Required when splitBy is 'size'. Specifies the size of each part in bytes.
+ * @param {SupportedCryptoAlgorithms} [options.createChecksum] - Optional. Create a checksum file using the specified algorithm. Defaults to 'sha256' when set.
+ * @param {('distribute'|'createNewFile')} [options.floatingPartSizeHandling='distribute'] - Optional. Determines how to handle remaining bytes:
+ *   - 'distribute': Distributes extra bytes across parts
+ *   - 'createNewFile': Creates an additional file for remaining bytes
+ * @param {boolean} [options.deleteFileAfterSplit] - Optional. Whether to delete the original file after splitting.
  * @returns {Promise<void>} A promise that resolves when the file has been successfully split.
+ * @throws {Error} If the file doesn't exist, is empty, or if options are invalid.
  */
 export async function splitFile(
   inputFilePath: string,
@@ -32,8 +42,19 @@ export async function splitFile(
       throw new Error("File doesn't exists!");
     }
 
+    if (!(await exists(outputPath))) {
+      await mkdir(outputPath, { recursive: true });
+    }
+
     if (file.size === 0) {
       throw new Error('File is empty!');
+    }
+
+    if (
+      (options.splitBy === 'number' && isFloat(options.numberOfParts)) ||
+      (options.splitBy === 'size' && isFloat(options.partSize))
+    ) {
+      throw new Error('Part size and number of parts should be integers');
     }
 
     const readStream: ReadableStream<Uint8Array> = file.stream();
@@ -42,14 +63,11 @@ export async function splitFile(
     const fileExt = fileInfo.ext;
     const fileSize = file.size;
     const hasher = new Bun.CryptoHasher(
-      typeof options.createChecksum === 'boolean' ||
-      options.createChecksum === undefined
-        ? 'sha256'
-        : options.createChecksum
+      options.createChecksum === undefined ? 'sha256' : options.createChecksum
     );
     const floatingPartSizeHandling =
       options.floatingPartSizeHandling === undefined
-        ? 'createNewFile'
+        ? 'distribute'
         : options.floatingPartSizeHandling;
 
     let currentPart = 1;
@@ -58,15 +76,13 @@ export async function splitFile(
     let remainingFromFloatingSize: number;
 
     if (options.splitBy === 'number') {
-      if (options.parts < 1) {
+      if (options.numberOfParts < 1) {
         throw new Error('Number of parts was to small');
       }
 
-      partSize = Math.floor(fileSize / options.parts);
-      remainingFromFloatingSize = isFloat(fileSize / options.parts)
-        ? fileSize - partSize * options.parts
-        : 0;
-      totalPart = options.parts;
+      partSize = Math.floor(fileSize / options.numberOfParts);
+      remainingFromFloatingSize = fileSize % options.numberOfParts;
+      totalPart = options.numberOfParts;
     } else {
       if (options.partSize > fileSize) {
         throw new Error(
@@ -80,26 +96,21 @@ export async function splitFile(
 
       partSize = options.partSize;
       totalPart = Math.floor(fileSize / partSize);
-      remainingFromFloatingSize = isFloat(fileSize / partSize)
-        ? fileSize - totalPart * partSize
-        : 0;
+      remainingFromFloatingSize = fileSize % partSize;
     }
 
-    const distributionSize =
-      remainingFromFloatingSize && remainingFromFloatingSize <= totalPart
+    const distributionSize = remainingFromFloatingSize
+      ? remainingFromFloatingSize <= totalPart
         ? 1
-        : remainingFromFloatingSize
-        ? Math.floor(remainingFromFloatingSize / totalPart)
-        : 0;
+        : Math.floor(remainingFromFloatingSize / totalPart)
+      : 0;
 
     let remainingDistributionSize =
-      remainingFromFloatingSize > totalPart &&
-      isFloat(remainingFromFloatingSize / totalPart)
-        ? remainingFromFloatingSize -
-          Math.floor(remainingFromFloatingSize / totalPart) * totalPart
+      remainingFromFloatingSize > totalPart
+        ? remainingFromFloatingSize % totalPart
         : 0;
 
-    const partName = `${fileName}.${fileExt}.${formatPartIndex(currentPart)}`;
+    const partName = `${fileName}${fileExt}.${formatPartIndex(currentPart)}`;
     let partPath = path.join(outputPath, partName);
     let writer = Bun.file(partPath).writer();
     let currentSize = 0;
@@ -111,7 +122,10 @@ export async function splitFile(
 
     for await (const chunk of readStream) {
       let chunkOffset = 0;
-      hasher.update(chunk);
+
+      if (options.createChecksum !== undefined) {
+        hasher.update(chunk);
+      }
 
       while (chunkOffset < chunk.length) {
         const spaceLeft =
@@ -145,13 +159,27 @@ export async function splitFile(
             currentPart++;
             partPath = path.join(
               outputPath,
-              `${fileName}.${fileExt}.${formatPartIndex(currentPart)}`
+              `${fileName}${fileExt}.${formatPartIndex(currentPart)}`
             );
             writer = Bun.file(partPath).writer();
             currentSize = 0;
           }
         }
       }
+    }
+
+    if (currentSize > 0) {
+      await writer.flush();
+      await writer.end();
+    }
+
+    if (options.createChecksum !== undefined) {
+      const checksum = hasher.digest('hex');
+      const checksumPath = path.join(
+        outputPath,
+        `${fileName}${fileExt}.sha256`
+      );
+      await Bun.write(checksumPath, checksum);
     }
   } catch (error) {
     throw new Error(

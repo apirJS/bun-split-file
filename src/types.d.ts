@@ -3,14 +3,14 @@ import type { SupportedCryptoAlgorithms } from 'bun';
 export type SplitFileOptions = (
   | {
       splitBy: 'number';
-      parts: number;
+      numberOfParts: number;
     }
   | {
       splitBy: 'size';
       partSize: number;
     }
 ) & {
-  createChecksum?: boolean | SupportedCryptoAlgorithms;
+  createChecksum?: SupportedCryptoAlgorithms;
   floatingPartSizeHandling?: 'distribute' | 'createNewFile';
   deleteFileAfterSplit?: boolean;
 };
