@@ -4,7 +4,7 @@
  */
 
 import path from 'node:path';
-import { exists, mkdir, rm } from 'node:fs/promises';
+import { exists, mkdir, readdir, rm } from 'node:fs/promises';
 import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { splitFile } from '../src';
 
@@ -13,7 +13,7 @@ const inputDir = path.resolve(__dirname, './input');
 const testFile = path.join(inputDir, 'test.bin');
 const FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
-let numberOfParts = 2;
+let numberOfParts = 1024;
 let partSize = 2 * 1024 * 1024;
 
 async function isResolved<T>(promise: Promise<T>) {
@@ -61,16 +61,52 @@ afterEach(async () => {
   await removeDir();
 });
 
-test(`Should split ${FILE_SIZE} Bytes file into ${numberOfParts} parts with ${Math.floor(
-  FILE_SIZE / numberOfParts
-)} for each part`, async () => {
-  const { success } = await isResolved(
+test('should split file into specified number of parts with correct checksums', async () => {
+  // Arrange
+  const expectedPartsCount = numberOfParts;
+  const expectedPartSize = Math.floor(FILE_SIZE / numberOfParts);
+
+  // Act
+  const result = await isResolved(
     splitFile(testFile, outputDir, {
       splitBy: 'number',
-      numberOfParts: numberOfParts,
+      numberOfParts,
       createChecksum: 'sha256',
     })
   );
 
-  expect(success).toBe(true);
+  // Assert
+  expect(result.success).toBe(true);
+
+  const files = await readdir(outputDir);
+  const partFiles = files.filter((f) => !f.endsWith('.sha256'));
+  const checksumFiles = files.filter((f) => f.endsWith('.sha256'));
+
+  // Verify correct number of files were created
+  expect(partFiles.length).toBe(expectedPartsCount);
+  expect(checksumFiles.length).toBe(1);
+
+  // Verify file sizes
+  for (const fileName of partFiles) {
+    const file = Bun.file(path.join(outputDir, fileName));
+    expect(file.size).toBe(expectedPartSize);
+  }
+
+  // Verify checksum file exists and is not empty
+  const checksumFile = Bun.file(path.join(outputDir, checksumFiles[0]));
+  const checksumContent = await checksumFile.text();
+  expect(checksumContent.length).toBeGreaterThan(0);
+
+  // Pass 0 as number of parts should return error
+  // Test with 0 parts
+  const zeroPartsResult = await isResolved(
+    splitFile(testFile, outputDir, {
+      splitBy: 'number',
+      numberOfParts: 0,
+      createChecksum: 'sha256',
+    })
+  );
+
+  expect(zeroPartsResult.success).toBe(false);
+  expect(zeroPartsResult.error).toBeDefined();
 });
