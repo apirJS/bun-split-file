@@ -11,10 +11,7 @@ import { splitFile } from '../src';
 const outputDir = path.resolve(__dirname, './output');
 const inputDir = path.resolve(__dirname, './input');
 const testFile = path.join(inputDir, 'test.bin');
-const FILE_SIZE = 10 * 1024 * 1024; // 10 MB
-
-let numberOfParts = 1024;
-let partSize = 2 * 1024 * 1024;
+const FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 
 async function isResolved<T>(promise: Promise<T>) {
   try {
@@ -63,6 +60,7 @@ afterEach(async () => {
 
 test('should split file into specified number of parts with correct checksums', async () => {
   // Arrange
+  const numberOfParts = 100;
   const expectedPartsCount = numberOfParts;
   const expectedPartSize = Math.floor(FILE_SIZE / numberOfParts);
 
@@ -97,7 +95,6 @@ test('should split file into specified number of parts with correct checksums', 
   const checksumContent = await checksumFile.text();
   expect(checksumContent.length).toBeGreaterThan(0);
 
-  // Pass 0 as number of parts should return error
   // Test with 0 parts
   const zeroPartsResult = await isResolved(
     splitFile(testFile, outputDir, {
@@ -109,4 +106,50 @@ test('should split file into specified number of parts with correct checksums', 
 
   expect(zeroPartsResult.success).toBe(false);
   expect(zeroPartsResult.error).toBeDefined();
+});
+
+test('should split file into specified size for each part with correct checksums', async () => {
+  const expectedPartSize = 25 * 1024 * 1024; // 25 MB
+  const expectedNumberOfParts = Math.floor(FILE_SIZE / expectedPartSize);
+
+  const result = await isResolved(
+    splitFile(testFile, outputDir, {
+      splitBy: 'size',
+      partSize: expectedPartSize,
+      createChecksum: 'sha256',
+    })
+  );
+
+  expect(result.success).toBe(true);
+
+  const files = await readdir(outputDir);
+  const partFiles = files.filter((f) => !f.endsWith('.sha256'));
+  const checksumFiles = files.filter((f) => f.endsWith('.sha256'));
+  const numberOfParts = partFiles.length;
+
+  expect(numberOfParts).toBe(expectedNumberOfParts);
+
+  const checksumFile = Bun.file(path.join(outputDir, checksumFiles[0]));
+  const checksumContent = await checksumFile.text();
+
+  expect(checksumContent.length).toBeGreaterThan(0);
+  expect(checksumFiles.length).toBe(1);
+
+  for (const part of partFiles) {
+    const f = Bun.file(path.join(outputDir, part));
+    const partSize = f.size;
+
+    expect(partSize).toBe(expectedPartSize);
+  }
+
+  const zeroPartSizeResult = await isResolved(
+    splitFile(testFile, outputDir, {
+      splitBy: 'size',
+      partSize: 0,
+      createChecksum: 'sha256',
+    })
+  );
+
+  expect(zeroPartSizeResult.success).toBe(false);
+  expect(zeroPartSizeResult.error).toBeDefined();
 });
