@@ -11,7 +11,7 @@ import { splitFile } from '../src';
 const outputDir = path.resolve(__dirname, './output');
 const inputDir = path.resolve(__dirname, './input');
 const testFile = path.join(inputDir, 'test.bin');
-const FILE_SIZE = 100 * 1024 * 1024; // 100 MB
+const FILE_SIZE = 100 * 1024 * 1024;
 
 async function isResolved<T>(promise: Promise<T>) {
   try {
@@ -60,7 +60,7 @@ afterEach(async () => {
 
 test('should split file into specified number of parts with correct checksums', async () => {
   // Arrange
-  const numberOfParts = 100;
+  const numberOfParts = 2;
   const expectedPartsCount = numberOfParts;
   const expectedPartSize = Math.floor(FILE_SIZE / numberOfParts);
 
@@ -109,7 +109,7 @@ test('should split file into specified number of parts with correct checksums', 
 });
 
 test('should split file into specified size for each part with correct checksums', async () => {
-  const expectedPartSize = 25 * 1024 * 1024; // 25 MB
+  const expectedPartSize = 10 * 1024 * 1024;
   const expectedNumberOfParts = Math.floor(FILE_SIZE / expectedPartSize);
 
   const result = await isResolved(
@@ -155,22 +155,16 @@ test('should split file into specified size for each part with correct checksums
 });
 
 test('should distribute remaining bytes (caused by floating size) evenly to first parts', async () => {
-  // 104857600 Bytes % 9 = 4 Bytes Will distributed evenly to the first 4 parts
-  // 104857600 Bytes / 9 = 11650844 Bytes + 1 Distributed Byte Each
-  // const expectedNumberOfParts = 9;
-  // const remainingFromFloatingSize = FILE_SIZE % expectedNumberOfParts;
-  // const distributionSize = remainingFromFloatingSize
-  //   ? remainingFromFloatingSize <= expectedNumberOfParts
-  //     ? 1
-  //     : Math.floor(remainingFromFloatingSize / expectedNumberOfParts)
-  //   : 0;
-  // const expectedPartSize = Math.floor(FILE_SIZE / expectedNumberOfParts);
-  // const expectedPartSizeWithExtraBytes = expectedPartSize + distributionSize;
+  const expectedPartSize = 11 * 1024 * 1024; // 11MB per part
+  const extraBytes = FILE_SIZE % expectedPartSize; // Remaining bytes after full parts
+  const expectedNumberOfParts = Math.floor(FILE_SIZE / expectedPartSize); // Number of full-sized parts
+  const distributionSize = Math.floor(extraBytes / expectedNumberOfParts); // Extra bytes per part
+  let remainingDistributionSize = extraBytes % expectedNumberOfParts; // Remainder extra bytes
 
   const result = await isResolved(
     splitFile(testFile, outputDir, {
       splitBy: 'size',
-      partSize: 11 * 1024 * 1024 ,
+      partSize: expectedPartSize,
       floatingPartSizeHandling: 'distribute',
     })
   );
@@ -178,19 +172,38 @@ test('should distribute remaining bytes (caused by floating size) evenly to firs
   expect(result.success).toBe(true);
 
   const files = await readdir(outputDir);
-  // const numberOfParts = files.length;
-  // expect(numberOfParts).toBe(expectedNumberOfParts);
+  const numberOfParts = files.length;
+  expect(numberOfParts).toBe(expectedNumberOfParts);
 
-  // let distributed = remainingFromFloatingSize;
+  let currentExtraBytes = extraBytes; // Track remaining extra bytes
 
   for (const f of files) {
     const file = Bun.file(path.join(outputDir, f));
-    console.log(file.size)
-    // if (distributed > 0) {
-    //   expect(file.size).toBe(expectedPartSizeWithExtraBytes);
-    // } else {
-    //   expect(file.size).toBe(expectedPartSize);
-    // }
-    // distributed -= distributionSize;
+    const fileSize = await file.size;
+
+    // Determine expected size for this part
+    const expectedSize =
+      expectedPartSize + (currentExtraBytes > 0 ? distributionSize + (remainingDistributionSize > 0 ? 1 : 0) : 0);
+
+    console.log(`File: ${f} | Size: ${fileSize} | Expected: ${expectedSize}`);
+
+    expect(fileSize).toBe(expectedSize);
+
+    // Reduce extra bytes as they are distributed
+    if (currentExtraBytes > 0) {
+      currentExtraBytes -= distributionSize + (remainingDistributionSize > 0 ? 1 : 0);
+      remainingDistributionSize -= remainingDistributionSize > 0 ? 1 : 0;
+    }
   }
 });
+
+// 100 MB 104857600
+// 11 MB 11534336 ~ Part Size
+
+// 104857600 / 11534336 = 9.0909090909 ~ Number of Part
+
+// 100 MB % 11 MB = 1048576 ~ Extra Bytes
+// 1048576 / 9 = 116508.444444444 ~ Distribution Size
+// 1048576 % 9 = 4 ~ Remaining Distribution Size
+
+// 11534336 + 116508 + 1

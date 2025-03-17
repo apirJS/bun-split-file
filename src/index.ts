@@ -73,7 +73,7 @@ export async function splitFile(
     let currentPart = 1;
     let partSize: number;
     let totalPart: number;
-    let remainingFromFloatingSize: number;
+    let extraBytes: number;
 
     if (options.splitBy === 'number') {
       if (options.numberOfParts < 1) {
@@ -81,7 +81,6 @@ export async function splitFile(
       }
 
       partSize = Math.floor(fileSize / options.numberOfParts);
-      remainingFromFloatingSize = fileSize % partSize;
       totalPart = options.numberOfParts;
     } else {
       if (options.partSize > fileSize) {
@@ -96,19 +95,13 @@ export async function splitFile(
 
       partSize = options.partSize;
       totalPart = Math.floor(fileSize / partSize);
-      remainingFromFloatingSize = fileSize % partSize;
     }
 
-    const distributionSize = remainingFromFloatingSize
-      ? remainingFromFloatingSize <= totalPart
-        ? 1
-        : Math.floor(remainingFromFloatingSize / totalPart)
-      : 0;
+    extraBytes = fileSize % partSize;
 
-    let remainingDistributionSize =
-      remainingFromFloatingSize > totalPart
-        ? remainingFromFloatingSize % totalPart
-        : 0;
+    const distributionSize = Math.floor(extraBytes / totalPart);
+
+    let remainingDistributionSize = extraBytes % totalPart;
 
     const partName = `${fileName}${fileExt}.${formatPartIndex(currentPart)}`;
     let partPath = path.join(outputPath, partName);
@@ -128,13 +121,12 @@ export async function splitFile(
       }
 
       while (chunkOffset < chunk.length) {
-        const spaceLeft =
-          partSize -
-          currentSize +
-          (floatingPartSizeHandling === 'distribute' &&
-          remainingFromFloatingSize > 0
+        const extra =
+          floatingPartSizeHandling === 'distribute' && extraBytes > 0
             ? distributionSize + (remainingDistributionSize > 0 ? 1 : 0)
-            : 0);
+            : 0;
+        const spaceLeft = partSize - currentSize + extra;
+
         const bytesToWrite = Math.min(spaceLeft, chunk.length - chunkOffset);
 
         writer.write(chunk.subarray(chunkOffset, chunkOffset + bytesToWrite));
@@ -142,16 +134,13 @@ export async function splitFile(
         totalSize += bytesToWrite;
         chunkOffset += bytesToWrite;
 
-        if (currentSize >= partSize) {
+        if (currentSize >= partSize + extra) {
           await writer.flush();
           await writer.end();
 
-          if (
-            floatingPartSizeHandling === 'distribute' &&
-            remainingFromFloatingSize > 0 &&
-            remainingDistributionSize > 0
-          ) {
-            remainingFromFloatingSize -= distributionSize;
+          if (floatingPartSizeHandling === 'distribute' && extraBytes > 0) {
+            extraBytes -=
+              distributionSize + (remainingDistributionSize > 0 ? 1 : 0);
             remainingDistributionSize -= 1;
           }
 
