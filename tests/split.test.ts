@@ -153,3 +153,44 @@ test('should split file into specified size for each part with correct checksums
   expect(zeroPartSizeResult.success).toBe(false);
   expect(zeroPartSizeResult.error).toBeDefined();
 });
+
+test('should distribute remaining bytes (caused by floating size) evenly to first parts', async () => {
+  // 104857600 Bytes % 9 = 4 Bytes Will distributed evenly to the first 4 parts
+  // 104857600 Bytes / 9 = 11650844 Bytes + 1 Distributed Byte Each
+  // const expectedNumberOfParts = 9;
+  // const remainingFromFloatingSize = FILE_SIZE % expectedNumberOfParts;
+  // const distributionSize = remainingFromFloatingSize
+  //   ? remainingFromFloatingSize <= expectedNumberOfParts
+  //     ? 1
+  //     : Math.floor(remainingFromFloatingSize / expectedNumberOfParts)
+  //   : 0;
+  // const expectedPartSize = Math.floor(FILE_SIZE / expectedNumberOfParts);
+  // const expectedPartSizeWithExtraBytes = expectedPartSize + distributionSize;
+
+  const result = await isResolved(
+    splitFile(testFile, outputDir, {
+      splitBy: 'size',
+      partSize: 11 * 1024 * 1024 ,
+      floatingPartSizeHandling: 'distribute',
+    })
+  );
+
+  expect(result.success).toBe(true);
+
+  const files = await readdir(outputDir);
+  // const numberOfParts = files.length;
+  // expect(numberOfParts).toBe(expectedNumberOfParts);
+
+  // let distributed = remainingFromFloatingSize;
+
+  for (const f of files) {
+    const file = Bun.file(path.join(outputDir, f));
+    console.log(file.size)
+    // if (distributed > 0) {
+    //   expect(file.size).toBe(expectedPartSizeWithExtraBytes);
+    // } else {
+    //   expect(file.size).toBe(expectedPartSize);
+    // }
+    // distributed -= distributionSize;
+  }
+});

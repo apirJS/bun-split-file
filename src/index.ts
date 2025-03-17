@@ -81,7 +81,7 @@ export async function splitFile(
       }
 
       partSize = Math.floor(fileSize / options.numberOfParts);
-      remainingFromFloatingSize = fileSize % options.numberOfParts;
+      remainingFromFloatingSize = fileSize % partSize;
       totalPart = options.numberOfParts;
     } else {
       if (options.partSize > fileSize) {
@@ -151,7 +151,7 @@ export async function splitFile(
             remainingFromFloatingSize > 0 &&
             remainingDistributionSize > 0
           ) {
-            remainingFromFloatingSize -= 1;
+            remainingFromFloatingSize -= distributionSize;
             remainingDistributionSize -= 1;
           }
 
