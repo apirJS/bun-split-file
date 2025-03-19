@@ -179,11 +179,14 @@ test('should distribute remaining bytes (caused by floating size) evenly to firs
 
   for (const f of files) {
     const file = Bun.file(path.join(outputDir, f));
-    const fileSize = await file.size;
+    const fileSize = file.size;
 
     // Determine expected size for this part
     const expectedSize =
-      expectedPartSize + (currentExtraBytes > 0 ? distributionSize + (remainingDistributionSize > 0 ? 1 : 0) : 0);
+      expectedPartSize +
+      (currentExtraBytes > 0
+        ? distributionSize + (remainingDistributionSize > 0 ? 1 : 0)
+        : 0);
 
     console.log(`File: ${f} | Size: ${fileSize} | Expected: ${expectedSize}`);
 
@@ -191,19 +194,43 @@ test('should distribute remaining bytes (caused by floating size) evenly to firs
 
     // Reduce extra bytes as they are distributed
     if (currentExtraBytes > 0) {
-      currentExtraBytes -= distributionSize + (remainingDistributionSize > 0 ? 1 : 0);
+      currentExtraBytes -=
+        distributionSize + (remainingDistributionSize > 0 ? 1 : 0);
       remainingDistributionSize -= remainingDistributionSize > 0 ? 1 : 0;
     }
   }
 });
+test('should create an additional file for remaining bytes when floatingPartSizeHandling is newFile', async () => {
+  const expectedPartSize = 11 * 1024 * 1024; // 11MB per part
+  const extraBytes = FILE_SIZE % expectedPartSize; // Remaining bytes after full parts
+  const expectedNumberOfParts = Math.ceil(FILE_SIZE / expectedPartSize); // Including the extra file
 
-// 100 MB 104857600
-// 11 MB 11534336 ~ Part Size
+  const result = await isResolved(
+    splitFile(testFile, outputDir, {
+      splitBy: 'size',
+      partSize: expectedPartSize,
+      floatingPartSizeHandling: 'createNewFile',
+    })
+  );
 
-// 104857600 / 11534336 = 9.0909090909 ~ Number of Part
+  expect(result.success).toBe(true);
 
-// 100 MB % 11 MB = 1048576 ~ Extra Bytes
-// 1048576 / 9 = 116508.444444444 ~ Distribution Size
-// 1048576 % 9 = 4 ~ Remaining Distribution Size
+  const files = await readdir(outputDir);
+  const sortedFiles = files.sort(); // Sort files to ensure we check them in order
+  const numberOfParts = files.length;
+  
+  expect(numberOfParts).toBe(expectedNumberOfParts);
 
-// 11534336 + 116508 + 1
+  // Check that all parts except the last one have the expected size
+  for (let i = 0; i < numberOfParts - 1; i++) {
+    const file = Bun.file(path.join(outputDir, sortedFiles[i]));
+    const fileSize = file.size;
+    expect(fileSize).toBe(expectedPartSize);
+  }
+
+  // The last part should contain just the remaining bytes
+  const lastFile = Bun.file(path.join(outputDir, sortedFiles[numberOfParts - 1]));
+  expect(lastFile.size).toBe(extraBytes);
+});
+
+

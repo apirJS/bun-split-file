@@ -166,7 +166,7 @@ export async function splitFile(
       const checksum = hasher.digest('hex');
       const checksumPath = path.join(
         outputPath,
-        `${fileName}${fileExt}.sha256`
+        `${fileName}${fileExt}.checksum.${options.createChecksum ?? 'sha256'}`
       );
       await Bun.write(checksumPath, checksum);
     }
