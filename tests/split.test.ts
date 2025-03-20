@@ -233,4 +233,157 @@ test('should create an additional file for remaining bytes when floatingPartSize
   expect(lastFile.size).toBe(extraBytes);
 });
 
+test('should throw error when input file does not exist', async () => {
+  // Arrange
+  const nonExistentFile = path.join(inputDir, 'doesNotExist.bin');
 
+  // Act
+  const result = await isResolved(
+    splitFile(nonExistentFile, outputDir, {
+      splitBy: 'number',
+      numberOfParts: 2,
+    })
+  );
+
+  // Assert
+  expect(result.success).toBe(false);
+  expect(result.error).toBeDefined();
+ expect((result.error as Error).message).toContain("File doesn't exists");
+});
+
+test('should throw error when input file is empty', async () => {
+  // Arrange
+  const emptyFile = path.join(inputDir, 'empty.bin');
+  await Bun.write(emptyFile, '');
+
+  // Act
+  const result = await isResolved(
+    splitFile(emptyFile, outputDir, {
+      splitBy: 'number',
+      numberOfParts: 2,
+    })
+  );
+
+  // Assert
+  expect(result.success).toBe(false);
+  expect(result.error).toBeDefined();
+  expect((result.error as Error).message).toContain('File is empty');
+});
+
+test('should throw error when using non-integer number of parts', async () => {
+  // Act
+  const result = await isResolved(
+    splitFile(testFile, outputDir, {
+      splitBy: 'number',
+      numberOfParts: 2.5,
+    })
+  );
+
+  // Assert
+  expect(result.success).toBe(false);
+  expect(result.error).toBeDefined();
+ expect((result.error as Error).message).toContain('should be integers');
+});
+
+test('should throw error when using non-integer part size', async () => {
+  // Act
+  const result = await isResolved(
+    splitFile(testFile, outputDir, {
+      splitBy: 'size',
+      partSize: 1024.5,
+    })
+  );
+
+  // Assert
+  expect(result.success).toBe(false);
+  expect(result.error).toBeDefined();
+ expect((result.error as Error).message).toContain('should be integers');
+});
+
+test('should throw error when part size is greater than file size', async () => {
+  // Act
+  const result = await isResolved(
+    splitFile(testFile, outputDir, {
+      splitBy: 'size',
+      partSize: FILE_SIZE + 1024,
+    })
+  );
+
+  // Assert
+  expect(result.success).toBe(false);
+  expect(result.error).toBeDefined();
+ expect((result.error as Error).message).toContain('cannot bigger than file size');
+});
+
+test('should throw error when part size is negative', async () => {
+  // Act
+  const result = await isResolved(
+    splitFile(testFile, outputDir, {
+      splitBy: 'size',
+      partSize: -1024,
+    })
+  );
+
+  // Assert
+  expect(result.success).toBe(false);
+  expect(result.error).toBeDefined();
+ expect((result.error as Error).message).toContain('cannot be negative or zero');
+});
+
+test('should throw error when number of parts is too large', async () => {
+  // Create a smaller file for this test
+  const smallFile = path.join(inputDir, 'small.bin');
+  await Bun.write(smallFile, Buffer.alloc(10, 1));
+  
+  // Act - Try to split into 11 parts (more than bytes in the file)
+  const result = await isResolved(
+    splitFile(smallFile, outputDir, {
+      splitBy: 'number',
+      numberOfParts: 11,
+    })
+  );
+
+  // Assert
+  expect(result.success).toBe(false);
+  expect(result.error).toBeDefined();
+ expect((result.error as Error).message).toContain('Number of parts is too large');
+});
+
+test('should create output directory if it does not exist', async () => {
+  // Arrange
+  const nonExistentOutputDir = path.join(outputDir, 'nested', 'output');
+  
+  // Act
+  const result = await isResolved(
+    splitFile(testFile, nonExistentOutputDir, {
+      splitBy: 'number',
+      numberOfParts: 2,
+    })
+  );
+
+  // Assert
+  expect(result.success).toBe(true);
+  expect(await exists(nonExistentOutputDir)).toBe(true);
+  
+  // Cleanup
+  await rm(path.join(outputDir, 'nested'), { recursive: true, force: true });
+});
+
+test('should delete original file when deleteFileAfterSplit is true', async () => {
+  // Arrange
+  const tempFile = path.join(inputDir, 'temp.bin');
+  await Bun.write(tempFile, Buffer.alloc(1024, 1));
+  
+  // Act
+  const result = await isResolved(
+    splitFile(tempFile, outputDir, {
+      splitBy: 'number',
+      numberOfParts: 2,
+      deleteFileAfterSplit: true,
+    })
+  );
+
+  // Assert
+  expect(result.success).toBe(true);
+  expect(await exists(tempFile)).toBe(false);
+});

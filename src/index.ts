@@ -1,6 +1,6 @@
 import path from 'node:path';
 import type { SplitFileOptions } from './types';
-import { mkdir, exists } from 'node:fs/promises';
+import { mkdir, exists, rm } from 'node:fs/promises';
 
 function formatPartIndex(index: number): string {
   const indexStr = `${index}`;
@@ -160,6 +160,10 @@ export async function splitFile(
     if (currentSize > 0) {
       await writer.flush();
       await writer.end();
+    }
+
+    if (options.deleteFileAfterSplit === true) {
+      await rm(inputFilePath);
     }
 
     if (options.createChecksum !== undefined) {
