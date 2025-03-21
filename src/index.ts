@@ -1,6 +1,28 @@
 import path from 'node:path';
 import type { SplitFileOptions } from './types';
 import { mkdir, exists, rm } from 'node:fs/promises';
+import type { CryptoHasher, SupportedCryptoAlgorithms } from 'bun';
+
+const SUPPORTED_HASH_ALG = [
+  'blake2b256',
+  'blake2b512',
+  'md4',
+  'md5',
+  'ripemd160',
+  'sha1',
+  'sha224',
+  'sha256',
+  'sha384',
+  'sha512',
+  'sha512-224',
+  'sha512-256',
+  'sha3-224',
+  'sha3-256',
+  'sha3-384',
+  'sha3-512',
+  'shake128',
+  'shake256',
+];
 
 function formatPartIndex(index: number): string {
   const indexStr = `${index}`;
@@ -54,7 +76,7 @@ export async function splitFile(
       (options.splitBy === 'number' && isFloat(options.numberOfParts)) ||
       (options.splitBy === 'size' && isFloat(options.partSize))
     ) {
-      throw new Error('Part size and number of parts should be integers');
+      throw new Error('Part size and number of parts should be an integer');
     }
 
     const readStream: ReadableStream<Uint8Array> = file.stream();
@@ -62,9 +84,8 @@ export async function splitFile(
     const fileName = fileInfo.name;
     const fileExt = fileInfo.ext;
     const fileSize = file.size;
-    const hasher = new Bun.CryptoHasher(
-      options.createChecksum === undefined ? 'sha256' : options.createChecksum
-    );
+    const hashAlg = options.createChecksum ?? 'sha256';
+    const hasher = new Bun.CryptoHasher(hashAlg);
     const floatingPartSizeHandling =
       options.floatingPartSizeHandling === undefined
         ? 'distribute'
@@ -77,7 +98,7 @@ export async function splitFile(
 
     if (options.splitBy === 'number') {
       if (options.numberOfParts < 1) {
-        throw new Error('Number of parts was to small');
+        throw new Error('Number of parts cannot be zero or negative');
       }
 
       partSize = Math.floor(fileSize / options.numberOfParts);
@@ -170,7 +191,7 @@ export async function splitFile(
       const checksum = hasher.digest('hex');
       const checksumPath = path.join(
         outputPath,
-        `${fileName}${fileExt}.checksum.${options.createChecksum ?? 'sha256'}`
+        `${fileName}${fileExt}.checksum.${hashAlg}`
       );
       await Bun.write(checksumPath, checksum);
     }
@@ -191,9 +212,95 @@ export async function splitFile(
  * @param {string} outputFilePath - Path where the merged output file will be saved.
  * @returns {Promise<void>} A promise that resolves when the files have been successfully merged.
  */
-// export async function mergeFiles(
-//   inputFilesPath: string[],
-//   outputFilePath: string
-// ): Promise<void> {
-//   // Function implementation
-// }
+export async function mergeFiles(
+  inputFilesPath: string[],
+  outputFilePath: string,
+  checksumPath?: string
+): Promise<void> {
+  try {
+    if (!(await exists(outputFilePath))) {
+      await mkdir(outputFilePath, { recursive: true });
+    }
+
+    if (inputFilesPath.length === 0) {
+      throw new Error('Input files is empty');
+    }
+
+    let checksumAlg: SupportedCryptoAlgorithms | null = null;
+    let hasher: CryptoHasher | null = null;
+
+    if (checksumPath) {
+      const ext = checksumPath.split('.').at(-1);
+      if (!ext) {
+        throw new Error('Checksum file is included, but not valid');
+      }
+
+      if (!SUPPORTED_HASH_ALG.includes(ext)) {
+        throw new Error(
+          'Provided checksum file has an invalid checksum algorithm'
+        );
+      }
+
+      checksumAlg = ext as SupportedCryptoAlgorithms;
+      hasher = new Bun.CryptoHasher(checksumAlg);
+    }
+
+    const files = inputFilesPath.sort((a, b) => {
+      const ai = a.split('.').at(-1);
+      const bi = b.split('.').at(-1);
+
+      if (!ai) {
+        throw new Error(`Invalid part's format: ${a}`);
+      }
+
+      if (!bi) {
+        throw new Error(`Invalid part's format: ${b}`);
+      }
+      return parseInt(a, 10) - parseInt(b, 10);
+    });
+
+    const writer = Bun.file(outputFilePath).writer();
+
+    for (const f of files) {
+      const part = Bun.file(f);
+
+      if (!(await part.exists())) {
+        throw new Error(`[${f}] didn't exists`);
+      }
+
+      if (part.size === 0) {
+        throw new Error(`[${f}] is empty`);
+      }
+
+      const readStream: ReadableStream<Uint8Array> = part.stream();
+
+      for await (const chunk of readStream) {
+        if (checksumPath && hasher) {
+          hasher.update(chunk);
+        }
+
+        writer.write(chunk);
+      }
+
+      writer.flush();
+    }
+
+    writer.end();
+
+    if (checksumPath && hasher) {
+      const originalChecksum = await Bun.file(checksumPath).text();
+      const checksum = hasher.digest('hex');
+
+      if (originalChecksum !== checksum) {
+        throw new Error('Checksum is not valid');
+      }
+    }
+  } catch (error) {
+    throw new Error(
+      `Failed to split the file: ${
+        error instanceof Error ? error.message : 'Unknown error'
+      }`,
+      { cause: error }
+    );
+  }
+}
