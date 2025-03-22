@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { SplitFileOptions } from './types';
+import type { MergeFilesOptions, SplitFileOptions } from './types';
 import { mkdir, exists, rm } from 'node:fs/promises';
 import type { CryptoHasher, SupportedCryptoAlgorithms } from 'bun';
 
@@ -210,16 +210,21 @@ export async function splitFile(
  *
  * @param {string[]} inputFilesPath - Array of paths to the input files to be merged.
  * @param {string} outputFilePath - Path where the merged output file will be saved.
+ * @param {MergeFilesOptions} [options] - Optional configuration for merging files.
+ * @param {string} [options.checksumPath] - Path to a checksum file to verify the merged result.
+ * @param {boolean} [options.deletePartsAfterMerge] - Whether to delete the input files after successful merge.
  * @returns {Promise<void>} A promise that resolves when the files have been successfully merged.
+ * @throws {Error} If input files don't exist, are empty, or if the checksum verification fails.
  */
 export async function mergeFiles(
   inputFilesPath: string[],
   outputFilePath: string,
-  checksumPath?: string
+  options?: MergeFilesOptions
 ): Promise<void> {
   try {
-    if (!(await exists(outputFilePath))) {
-      await mkdir(outputFilePath, { recursive: true });
+    const parentDir = path.dirname(outputFilePath);
+    if (!(await exists(parentDir))) {
+      await mkdir(parentDir, { recursive: true });
     }
 
     if (inputFilesPath.length === 0) {
@@ -229,8 +234,8 @@ export async function mergeFiles(
     let checksumAlg: SupportedCryptoAlgorithms | null = null;
     let hasher: CryptoHasher | null = null;
 
-    if (checksumPath) {
-      const ext = checksumPath.split('.').at(-1);
+    if (options?.checksumPath) {
+      const ext = options.checksumPath.split('.').at(-1);
       if (!ext) {
         throw new Error('Checksum file is included, but not valid');
       }
@@ -275,7 +280,7 @@ export async function mergeFiles(
       const readStream: ReadableStream<Uint8Array> = part.stream();
 
       for await (const chunk of readStream) {
-        if (checksumPath && hasher) {
+        if (options?.checksumPath && hasher) {
           hasher.update(chunk);
         }
 
@@ -283,12 +288,16 @@ export async function mergeFiles(
       }
 
       writer.flush();
+
+      if (options?.deletePartsAfterMerge) {
+        await part.delete();
+      }
     }
 
     writer.end();
 
-    if (checksumPath && hasher) {
-      const originalChecksum = await Bun.file(checksumPath).text();
+    if (options?.checksumPath && hasher) {
+      const originalChecksum = await Bun.file(options?.checksumPath).text();
       const checksum = hasher.digest('hex');
 
       if (originalChecksum !== checksum) {

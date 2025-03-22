@@ -14,3 +14,8 @@ export type SplitFileOptions = (
   floatingPartSizeHandling?: 'distribute' | 'createNewFile';
   deleteFileAfterSplit?: boolean;
 };
+
+export type MergeFilesOptions = {
+  checksumPath?: string;
+  deletePartsAfterMerge?: boolean;
+};
