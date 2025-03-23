@@ -1,1 +1,1 @@
-NPM package
+# bun-split-file

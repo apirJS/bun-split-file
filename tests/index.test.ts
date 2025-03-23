@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { exists, mkdir, readdir, rm } from 'node:fs/promises';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mergeFiles, splitFile } from '../src';
+import { mergeFiles, splitFile } from '../dist';
 
 const outputDir = path.resolve(__dirname, './output');
 const inputDir = path.resolve(__dirname, './input');

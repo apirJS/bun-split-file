@@ -87,9 +87,7 @@ export async function splitFile(
     const hashAlg = options.createChecksum ?? 'sha256';
     const hasher = new Bun.CryptoHasher(hashAlg);
     const floatingPartSizeHandling =
-      options.floatingPartSizeHandling === undefined
-        ? 'distribute'
-        : options.floatingPartSizeHandling;
+      options.floatingPartSizeHandling ?? 'distribute';
 
     let currentPart = 1;
     let partSize: number;
@@ -156,7 +154,6 @@ export async function splitFile(
         chunkOffset += bytesToWrite;
 
         if (currentSize >= partSize + extra) {
-          await writer.flush();
           await writer.end();
 
           if (floatingPartSizeHandling === 'distribute' && extraBytes > 0) {
@@ -179,7 +176,6 @@ export async function splitFile(
     }
 
     if (currentSize > 0) {
-      await writer.flush();
       await writer.end();
     }
 
