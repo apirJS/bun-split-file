@@ -145,7 +145,7 @@ describe('splitFile - file splitting and checksums', () => {
       splitFile(testFile, outputDir, {
         splitBy: 'size',
         partSize: expectedPartSize,
-        floatingPartSizeHandling: 'distribute',
+        extraBytesHandling: 'distribute',
       })
     );
 
@@ -173,7 +173,7 @@ describe('splitFile - file splitting and checksums', () => {
     }
   });
 
-  test('should create an additional file for remaining bytes when floatingPartSizeHandling is newFile', async () => {
+  test('should create an additional file for remaining bytes when extraBytesHandling is newFile', async () => {
     const expectedPartSize = 11 * 1024 * 1024;
     const extraBytes = FILE_SIZE % expectedPartSize;
     const expectedNumberOfParts = Math.ceil(FILE_SIZE / expectedPartSize);
@@ -182,7 +182,7 @@ describe('splitFile - file splitting and checksums', () => {
       splitFile(testFile, outputDir, {
         splitBy: 'size',
         partSize: expectedPartSize,
-        floatingPartSizeHandling: 'createNewFile',
+        extraBytesHandling: 'createNewFile',
       })
     );
 

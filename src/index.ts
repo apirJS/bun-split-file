@@ -45,7 +45,7 @@ function isFloat(x: number): boolean {
  * @param {number} [options.numberOfParts] - Required when splitBy is 'number'. Specifies how many parts the file will be split into.
  * @param {number} [options.partSize] - Required when splitBy is 'size'. Specifies the size of each part in bytes.
  * @param {SupportedCryptoAlgorithms} [options.createChecksum] - Optional. Create a checksum file using the specified algorithm. Defaults to 'sha256' when set.
- * @param {('distribute'|'createNewFile')} [options.floatingPartSizeHandling='distribute'] - Optional. Determines how to handle remaining bytes:
+ * @param {('distribute'|'createNewFile')} [options.extraBytesHandling='distribute'] - Optional. Determines how to handle remaining bytes:
  *   - 'distribute': Distributes extra bytes across parts
  *   - 'createNewFile': Creates an additional file for remaining bytes
  * @param {boolean} [options.deleteFileAfterSplit] - Optional. Whether to delete the original file after splitting.
@@ -86,8 +86,8 @@ export async function splitFile(
     const fileSize = file.size;
     const hashAlg = options.createChecksum ?? 'sha256';
     const hasher = new Bun.CryptoHasher(hashAlg);
-    const floatingPartSizeHandling =
-      options.floatingPartSizeHandling ?? 'distribute';
+    const extraBytesHandling =
+      options.extraBytesHandling ?? 'distribute';
 
     let currentPart = 1;
     let partSize: number;
@@ -141,7 +141,7 @@ export async function splitFile(
 
       while (chunkOffset < chunk.length) {
         const extra =
-          floatingPartSizeHandling === 'distribute' && extraBytes > 0
+          extraBytesHandling === 'distribute' && extraBytes > 0
             ? distributionSize + (remainingDistributionSize > 0 ? 1 : 0)
             : 0;
         const spaceLeft = partSize - currentSize + extra;
@@ -156,7 +156,7 @@ export async function splitFile(
         if (currentSize >= partSize + extra) {
           await writer.end();
 
-          if (floatingPartSizeHandling === 'distribute' && extraBytes > 0) {
+          if (extraBytesHandling === 'distribute' && extraBytes > 0) {
             extraBytes -=
               distributionSize + (remainingDistributionSize > 0 ? 1 : 0);
             remainingDistributionSize -= 1;
@@ -204,7 +204,7 @@ export async function splitFile(
 /**
  * Merges multiple files into a single output file.
  *
- * @param {string[]} inputFilesPath - Array of paths to the input files to be merged.
+ * @param {string[]} inputFilePaths - Array of paths to the input files to be merged.
  * @param {string} outputFilePath - Path where the merged output file will be saved.
  * @param {MergeFilesOptions} [options] - Optional configuration for merging files.
  * @param {string} [options.checksumPath] - Path to a checksum file to verify the merged result.
@@ -213,7 +213,7 @@ export async function splitFile(
  * @throws {Error} If input files don't exist, are empty, or if the checksum verification fails.
  */
 export async function mergeFiles(
-  inputFilesPath: string[],
+  inputFilePaths: string[],
   outputFilePath: string,
   options?: MergeFilesOptions
 ): Promise<void> {
@@ -223,7 +223,7 @@ export async function mergeFiles(
       await mkdir(parentDir, { recursive: true });
     }
 
-    if (inputFilesPath.length === 0) {
+    if (inputFilePaths.length === 0) {
       throw new Error('Input files is empty');
     }
 
@@ -246,7 +246,7 @@ export async function mergeFiles(
       hasher = new Bun.CryptoHasher(checksumAlg);
     }
 
-    const files = inputFilesPath.sort((a, b) => {
+    const files = inputFilePaths.sort((a, b) => {
       const ai = a.split('.').at(-1);
       const bi = b.split('.').at(-1);
 
