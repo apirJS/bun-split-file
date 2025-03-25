@@ -1,7 +1,8 @@
 import path from 'node:path';
 import type { MergeFilesOptions, SplitFileOptions } from './types';
-import { mkdir, exists, rm } from 'node:fs/promises';
+import { mkdir, rm } from 'node:fs/promises';
 import type { CryptoHasher, SupportedCryptoAlgorithms } from 'bun';
+import { existsSync } from 'node:fs';
 
 const SUPPORTED_HASH_ALG = [
   'blake2b256',
@@ -64,7 +65,7 @@ export async function splitFile(
       throw new Error("File doesn't exists!");
     }
 
-    if (!(await exists(outputPath))) {
+    if (!existsSync(outputPath)) {
       await mkdir(outputPath, { recursive: true });
     }
 
@@ -86,8 +87,7 @@ export async function splitFile(
     const fileSize = file.size;
     const hashAlg = options.createChecksum ?? 'sha256';
     const hasher = new Bun.CryptoHasher(hashAlg);
-    const extraBytesHandling =
-      options.extraBytesHandling ?? 'distribute';
+    const extraBytesHandling = options.extraBytesHandling ?? 'distribute';
 
     let currentPart = 1;
     let partSize: number;
@@ -219,7 +219,7 @@ export async function mergeFiles(
 ): Promise<void> {
   try {
     const parentDir = path.dirname(outputFilePath);
-    if (!(await exists(parentDir))) {
+    if (!existsSync(parentDir)) {
       await mkdir(parentDir, { recursive: true });
     }
 

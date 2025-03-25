@@ -32,24 +32,24 @@ await splitFile('./input/video.mp4', './chunks', {
 
 // Split into specific number of parts
 await splitFile('./input/large-dataset.csv', './parts', {
-  splitBy: 'number', 
+  splitBy: 'number',
   numberOfParts: 5,
   createChecksum: 'sha256',
-  deleteFileAfterSplit: true // remove original after splitting
+  deleteFileAfterSplit: true, // remove original after splitting
 });
 
 // Distribute extra bytes to an additional file
 await splitFile('./input/large-dataset.csv', './parts', {
-  splitBy: 'number', 
+  splitBy: 'number',
   numberOfParts: 5,
-  extraBytesHandling: 'newFile'
+  extraBytesHandling: 'newFile',
 });
 ```
 
 ### Merge Files Back
 
 ```ts
-import { mergeFiles } from 'bun-file-slicer';
+import { mergeFiles } from 'bun-split-file';
 
 await mergeFiles(
   [
@@ -65,20 +65,27 @@ await mergeFiles(
 );
 ```
 
+### NodeJS support
+
+```ts
+// will work on nodejs runtime
+import { mergeFiles, splitFile } from 'bun-split-file/node';
+```
+
 ---
 
 ## API Reference
 
 ### `splitFile(inputFilePath, outputPath, options)`
 
-| Option                     | Type                                | Description                                                                                                 |
-| -------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `splitBy`                  | `'number'` or `'size'`              | How to split the file                                                                                       |
-| `numberOfParts`            | `number`                            | Required if `splitBy = 'number'`                                                                            |
-| `partSize`                 | `number`                            | Required if `splitBy = 'size'`                                                                              |
-| `createChecksum`           | `SupportedCryptoAlgorithms`         | Optional hash (e.g., `'sha256'`) - [Supported algorithms](https://bun.sh/docs/api/hashing#bun-cryptohasher) |
-| `extraBytesHandling` | `'distribute'` or `'createNewFile'` | Optional. `distribute`: Distributes extra bytes across parts `createNewFile`: Creates an additional file for remaining bytes. Default `distribute`                                                                                |
-| `deleteFileAfterSplit`     | `boolean`                           | Optional. Delete original file after split, default `false`                                                                           |
+| Option                 | Type                                | Description                                                                                                                                        |
+| ---------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `splitBy`              | `'number'` or `'size'`              | How to split the file                                                                                                                              |
+| `numberOfParts`        | `number`                            | Required if `splitBy = 'number'`                                                                                                                   |
+| `partSize`             | `number`                            | Required if `splitBy = 'size'`                                                                                                                     |
+| `createChecksum`       | `SupportedCryptoAlgorithms`         | Optional hash (e.g., `'sha256'`) - [Supported algorithms](https://bun.sh/docs/api/hashing#bun-cryptohasher)                                        |
+| `extraBytesHandling`   | `'distribute'` or `'createNewFile'` | Optional. `distribute`: Distributes extra bytes across parts `createNewFile`: Creates an additional file for remaining bytes. Default `distribute` |
+| `deleteFileAfterSplit` | `boolean`                           | Optional. Delete original file after split, default `false`                                                                                        |
 
 ### `mergeFiles(inputFilePaths, outputFilePath, options?)`
 
