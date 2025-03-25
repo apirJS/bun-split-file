@@ -32,10 +32,6 @@ function formatPartIndex(index: number): string {
   )}${indexStr}`;
 }
 
-function isFloat(x: number): boolean {
-  return x % 1 !== 0;
-}
-
 /**
  * Splits a file into multiple parts based on the provided options.
  *
@@ -74,33 +70,32 @@ export async function splitFile(
     }
 
     if (
-      (options.splitBy === 'number' && isFloat(options.numberOfParts)) ||
-      (options.splitBy === 'size' && isFloat(options.partSize))
+      (options.splitBy === 'number' && !Number.isInteger(options.numberOfParts)) ||
+      (options.splitBy === 'size' && !Number.isInteger(options.partSize))
     ) {
       throw new Error('Part size and number of parts should be an integer');
     }
 
     const readStream: ReadableStream<Uint8Array> = file.stream();
-    const fileInfo = path.parse(inputFilePath);
-    const fileName = fileInfo.name;
-    const fileExt = fileInfo.ext;
+    const fileName = path.basename(inputFilePath);
     const fileSize = file.size;
     const hashAlg = options.createChecksum ?? 'sha256';
-    const hasher = new Bun.CryptoHasher(hashAlg);
+    const hasher = options.createChecksum
+      ? new Bun.CryptoHasher(hashAlg)
+      : null;
     const extraBytesHandling = options.extraBytesHandling ?? 'distribute';
 
     let currentPart = 1;
     let partSize: number;
-    let totalPart: number;
-    let extraBytes: number;
+    let totalParts: number;
 
     if (options.splitBy === 'number') {
       if (options.numberOfParts < 1) {
         throw new Error('Number of parts cannot be zero or negative');
       }
 
-      partSize = Math.floor(fileSize / options.numberOfParts);
-      totalPart = options.numberOfParts;
+      totalParts = options.numberOfParts;
+      partSize = Math.floor(fileSize / totalParts);
     } else {
       if (options.partSize > fileSize) {
         throw new Error(
@@ -113,20 +108,29 @@ export async function splitFile(
       }
 
       partSize = options.partSize;
-      totalPart = Math.floor(fileSize / partSize);
+      totalParts = Math.floor(fileSize / partSize);
     }
 
-    extraBytes = fileSize % partSize;
+    // Pre-calculate partSize
+    const extraBytes = fileSize % partSize;
+    if (extraBytesHandling === 'createNewFile' && extraBytes > 0) {
+      totalParts++;
+    }
+    const partSizes: number[] = [];
+    const baseExtra = Math.floor(extraBytes / totalParts);
+    let remainder = extraBytes % totalParts;
+    for (let i = 0; i < totalParts; i++) {
+      partSizes[i] =
+        partSize +
+        (extraBytesHandling === 'distribute'
+          ? baseExtra + (remainder-- > 0 ? 1 : 0)
+          : 0);
+    }
 
-    const distributionSize = Math.floor(extraBytes / totalPart);
-
-    let remainingDistributionSize = extraBytes % totalPart;
-
-    const partName = `${fileName}${fileExt}.${formatPartIndex(currentPart)}`;
+    const partName = `${fileName}.${formatPartIndex(currentPart)}`;
     let partPath = path.join(outputPath, partName);
     let writer = Bun.file(partPath).writer();
     let currentSize = 0;
-    let totalSize = 0;
 
     if (partSize < 1) {
       throw new Error(`Number of parts is too large`);
@@ -135,59 +139,47 @@ export async function splitFile(
     for await (const chunk of readStream) {
       let chunkOffset = 0;
 
-      if (options.createChecksum !== undefined) {
+      if (hasher) {
         hasher.update(chunk);
       }
 
       while (chunkOffset < chunk.length) {
-        const extra =
-          extraBytesHandling === 'distribute' && extraBytes > 0
-            ? distributionSize + (remainingDistributionSize > 0 ? 1 : 0)
-            : 0;
-        const spaceLeft = partSize - currentSize + extra;
-
-        const bytesToWrite = Math.min(spaceLeft, chunk.length - chunkOffset);
+        const expectedSize = partSizes[currentPart - 1];
+        const bytesToWrite = Math.min(
+          expectedSize - currentSize,
+          chunk.length - chunkOffset
+        );
 
         writer.write(chunk.subarray(chunkOffset, chunkOffset + bytesToWrite));
+        await writer.flush()
+        
         currentSize += bytesToWrite;
-        totalSize += bytesToWrite;
         chunkOffset += bytesToWrite;
 
-        if (currentSize >= partSize + extra) {
-          await writer.end();
-
-          if (extraBytesHandling === 'distribute' && extraBytes > 0) {
-            extraBytes -=
-              distributionSize + (remainingDistributionSize > 0 ? 1 : 0);
-            remainingDistributionSize -= 1;
-          }
-
-          if (totalSize < fileSize) {
-            currentPart++;
-            partPath = path.join(
-              outputPath,
-              `${fileName}${fileExt}.${formatPartIndex(currentPart)}`
-            );
-            writer = Bun.file(partPath).writer();
-            currentSize = 0;
-          }
+        if (currentPart < totalParts && currentSize >= expectedSize) {
+          await writer.end()
+          currentPart++;
+          partPath = path.join(
+            outputPath,
+            `${fileName}.${formatPartIndex(currentPart)}`
+          );
+          writer = Bun.file(partPath).writer();
+          currentSize = 0;
         }
       }
     }
 
-    if (currentSize > 0) {
-      await writer.end();
-    }
+    await writer.end();
 
     if (options.deleteFileAfterSplit === true) {
       await rm(inputFilePath);
     }
 
-    if (options.createChecksum !== undefined) {
+    if (hasher) {
       const checksum = hasher.digest('hex');
       const checksumPath = path.join(
         outputPath,
-        `${fileName}${fileExt}.checksum.${hashAlg}`
+        `${fileName}.checksum.${hashAlg}`
       );
       await Bun.write(checksumPath, checksum);
     }
@@ -283,17 +275,17 @@ export async function mergeFiles(
         writer.write(chunk);
       }
 
-      writer.flush();
+      await writer.flush();
 
       if (options?.deletePartsAfterMerge) {
         await part.delete();
       }
     }
 
-    writer.end();
+    await writer.end();
 
     if (options?.checksumPath && hasher) {
-      const originalChecksum = await Bun.file(options?.checksumPath).text();
+      const originalChecksum = await Bun.file(options.checksumPath).text();
       const checksum = hasher.digest('hex');
 
       if (originalChecksum !== checksum) {

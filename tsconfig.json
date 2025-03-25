@@ -23,6 +23,7 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "allowJs": true
   },
 }

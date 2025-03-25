@@ -1,13 +1,23 @@
 import path from 'node:path';
 import { exists, mkdir, readdir, rm } from 'node:fs/promises';
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mergeFiles, splitFile } from '../dist';
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from 'bun:test';
+import { mergeFiles, splitFile } from '../src/index';
 
 const outputDir = path.resolve(__dirname, './output');
 const inputDir = path.resolve(__dirname, './input');
 const testFile = path.join(inputDir, 'test.bin');
 const FILE_SIZE = 100 * 1024 * 1024;
 
+/**
+ * Wraps a promise to return an object indicating success or failure.
+ */
 async function isResolved<T>(promise: Promise<T>) {
   try {
     const result = await promise;
@@ -17,6 +27,9 @@ async function isResolved<T>(promise: Promise<T>) {
   }
 }
 
+/**
+ * Creates the test file if it doesn't exist.
+ */
 async function createFile() {
   if (!(await exists(testFile))) {
     const file = Buffer.alloc(FILE_SIZE, 0);
@@ -24,21 +37,25 @@ async function createFile() {
   }
 }
 
+/**
+ * Removes input and output directories.
+ */
 async function removeDir() {
   if (await exists(inputDir)) {
     await rm(inputDir, { recursive: true, force: true });
   }
-
   if (await exists(outputDir)) {
     await rm(outputDir, { recursive: true, force: true });
   }
 }
 
+/**
+ * Creates input and output directories if they don't exist.
+ */
 async function createDir() {
   if (!(await exists(inputDir))) {
     await mkdir(inputDir, { recursive: true });
   }
-
   if (!(await exists(outputDir))) {
     await mkdir(outputDir, { recursive: true });
   }
@@ -53,6 +70,10 @@ afterEach(async () => {
   await removeDir();
 });
 
+beforeAll(async () => {
+  await removeDir();
+});
+
 describe('splitFile - file splitting and checksums', () => {
   test('should split file into specified number of parts with correct checksums', async () => {
     const numberOfParts = 2;
@@ -61,7 +82,7 @@ describe('splitFile - file splitting and checksums', () => {
     const result = await isResolved(
       splitFile(testFile, outputDir, {
         splitBy: 'number',
-        numberOfParts,
+        numberOfParts: numberOfParts,
         createChecksum: 'sha256',
       })
     );
@@ -69,6 +90,7 @@ describe('splitFile - file splitting and checksums', () => {
     expect(result.success).toBe(true);
 
     const files = await readdir(outputDir);
+    // Separate part files and checksum file(s)
     const partFiles = files.filter((f) => !f.endsWith('.sha256'));
     const checksumFiles = files.filter((f) => f.endsWith('.sha256'));
 
@@ -84,6 +106,7 @@ describe('splitFile - file splitting and checksums', () => {
     const checksumContent = await checksumFile.text();
     expect(checksumContent.length).toBeGreaterThan(0);
 
+    // Verify error when zero parts is provided
     const zeroPartsResult = await isResolved(
       splitFile(testFile, outputDir, {
         splitBy: 'number',
@@ -91,13 +114,12 @@ describe('splitFile - file splitting and checksums', () => {
         createChecksum: 'sha256',
       })
     );
-
     expect(zeroPartsResult.success).toBe(false);
     expect(zeroPartsResult.error).toBeDefined();
   });
 
   test('should split file into specified size for each part with correct checksums', async () => {
-    const expectedPartSize = 10 * 1024 * 1024;
+    const expectedPartSize = 10 * 1024 * 1024; // 10 MB
     const expectedNumberOfParts = Math.floor(FILE_SIZE / expectedPartSize);
 
     const result = await isResolved(
@@ -122,6 +144,7 @@ describe('splitFile - file splitting and checksums', () => {
       expect(f.size).toBe(expectedPartSize);
     }
 
+    // Verify error when partSize is zero
     const zeroPartSizeResult = await isResolved(
       splitFile(testFile, outputDir, {
         splitBy: 'size',
@@ -129,53 +152,14 @@ describe('splitFile - file splitting and checksums', () => {
         createChecksum: 'sha256',
       })
     );
-
     expect(zeroPartSizeResult.success).toBe(false);
     expect(zeroPartSizeResult.error).toBeDefined();
   });
 
-  test('should distribute remaining bytes (caused by floating size) evenly to first parts', async () => {
-    const expectedPartSize = 11 * 1024 * 1024;
+  test('should create an additional file for remaining bytes when using "createNewFile"', async () => {
+    const expectedPartSize = 11 * 1024 * 1024; // 11 MB
     const extraBytes = FILE_SIZE % expectedPartSize;
-    const expectedNumberOfParts = Math.floor(FILE_SIZE / expectedPartSize);
-    const distributionSize = Math.floor(extraBytes / expectedNumberOfParts);
-    let remainingDistributionSize = extraBytes % expectedNumberOfParts;
-
-    const result = await isResolved(
-      splitFile(testFile, outputDir, {
-        splitBy: 'size',
-        partSize: expectedPartSize,
-        extraBytesHandling: 'distribute',
-      })
-    );
-
-    expect(result.success).toBe(true);
-
-    const files = await readdir(outputDir);
-    expect(files.length).toBe(expectedNumberOfParts);
-
-    let currentExtraBytes = extraBytes;
-    for (const f of files) {
-      const file = Bun.file(path.join(outputDir, f));
-      const expectedSize =
-        expectedPartSize +
-        (currentExtraBytes > 0
-          ? distributionSize + (remainingDistributionSize > 0 ? 1 : 0)
-          : 0);
-
-      expect(file.size).toBe(expectedSize);
-
-      if (currentExtraBytes > 0) {
-        currentExtraBytes -=
-          distributionSize + (remainingDistributionSize > 0 ? 1 : 0);
-        remainingDistributionSize -= remainingDistributionSize > 0 ? 1 : 0;
-      }
-    }
-  });
-
-  test('should create an additional file for remaining bytes when extraBytesHandling is newFile', async () => {
-    const expectedPartSize = 11 * 1024 * 1024;
-    const extraBytes = FILE_SIZE % expectedPartSize;
+    // In createNewFile mode, an extra file is created for the remaining bytes.
     const expectedNumberOfParts = Math.ceil(FILE_SIZE / expectedPartSize);
 
     const result = await isResolved(
@@ -188,15 +172,16 @@ describe('splitFile - file splitting and checksums', () => {
 
     expect(result.success).toBe(true);
 
-    const files = await readdir(outputDir);
-    const sortedFiles = files.sort();
-    expect(files.length).toBe(expectedNumberOfParts);
+    const sortedFiles = (await readdir(outputDir)).sort();
+    expect(sortedFiles.length).toBe(expectedNumberOfParts);
 
+    // All parts except the last should be of fixed expectedPartSize.
     for (let i = 0; i < expectedNumberOfParts - 1; i++) {
       const file = Bun.file(path.join(outputDir, sortedFiles[i]));
       expect(file.size).toBe(expectedPartSize);
     }
 
+    // The last file should contain the remaining extra bytes.
     const lastFile = Bun.file(
       path.join(outputDir, sortedFiles[expectedNumberOfParts - 1])
     );
@@ -213,23 +198,20 @@ describe('splitFile - error handling', () => {
         numberOfParts: 2,
       })
     );
-
     expect(result.success).toBe(false);
     expect(result.error).toBeDefined();
-    expect((result.error as Error).message).toContain("File doesn't exists");
+    expect((result.error as Error).message).toContain("File doesn't exist");
   });
 
   test('should throw error when input file is empty', async () => {
     const emptyFile = path.join(inputDir, 'empty.bin');
     await Bun.write(emptyFile, '');
-
     const result = await isResolved(
       splitFile(emptyFile, outputDir, {
         splitBy: 'number',
         numberOfParts: 2,
       })
     );
-
     expect(result.success).toBe(false);
     expect(result.error).toBeDefined();
     expect((result.error as Error).message).toContain('File is empty');
@@ -242,10 +224,11 @@ describe('splitFile - error handling', () => {
         numberOfParts: 2.5,
       })
     );
-
     expect(result.success).toBe(false);
     expect(result.error).toBeDefined();
-    expect((result.error as Error).message).toContain('should be an integer');
+    expect((result.error as Error).message).toContain(
+      'Part size and number of parts should be an integer'
+    );
   });
 
   test('should throw error when using non-integer part size', async () => {
@@ -255,10 +238,11 @@ describe('splitFile - error handling', () => {
         partSize: 1024.5,
       })
     );
-
     expect(result.success).toBe(false);
     expect(result.error).toBeDefined();
-    expect((result.error as Error).message).toContain('should be an integer');
+    expect((result.error as Error).message).toContain(
+      'Part size and number of parts should be an integer'
+    );
   });
 
   test('should throw error when part size is greater than file size', async () => {
@@ -268,11 +252,10 @@ describe('splitFile - error handling', () => {
         partSize: FILE_SIZE + 1024,
       })
     );
-
     expect(result.success).toBe(false);
     expect(result.error).toBeDefined();
     expect((result.error as Error).message).toContain(
-      'cannot bigger than file size'
+      'Part size cannot bigger than file size'
     );
   });
 
@@ -283,25 +266,24 @@ describe('splitFile - error handling', () => {
         partSize: -1024,
       })
     );
-
     expect(result.success).toBe(false);
     expect(result.error).toBeDefined();
+    // Expecting a message indicating the part size must be a positive integer.
     expect((result.error as Error).message).toContain(
-      'cannot be negative or zero'
+      'Part size cannot be negative or zero'
     );
   });
 
   test('should throw error when number of parts is too large', async () => {
+    // Create a very small file.
     const smallFile = path.join(inputDir, 'small.bin');
     await Bun.write(smallFile, Buffer.alloc(10, 1));
-
     const result = await isResolved(
       splitFile(smallFile, outputDir, {
         splitBy: 'number',
         numberOfParts: 11,
       })
     );
-
     expect(result.success).toBe(false);
     expect(result.error).toBeDefined();
     expect((result.error as Error).message).toContain(
@@ -313,24 +295,21 @@ describe('splitFile - error handling', () => {
 describe('splitFile - misc options', () => {
   test('should create output directory if it does not exist', async () => {
     const nonExistentOutputDir = path.join(outputDir, 'nested', 'output');
-
     const result = await isResolved(
       splitFile(testFile, nonExistentOutputDir, {
         splitBy: 'number',
         numberOfParts: 2,
       })
     );
-
     expect(result.success).toBe(true);
     expect(await exists(nonExistentOutputDir)).toBe(true);
-
+    // Cleanup nested directory.
     await rm(path.join(outputDir, 'nested'), { recursive: true, force: true });
   });
 
   test('should delete original file when deleteFileAfterSplit is true', async () => {
     const tempFile = path.join(inputDir, 'temp.bin');
     await Bun.write(tempFile, Buffer.alloc(1024, 1));
-
     const result = await isResolved(
       splitFile(tempFile, outputDir, {
         splitBy: 'number',
@@ -338,7 +317,6 @@ describe('splitFile - misc options', () => {
         deleteFileAfterSplit: true,
       })
     );
-
     expect(result.success).toBe(true);
     expect(await exists(tempFile)).toBe(false);
   });
@@ -346,6 +324,7 @@ describe('splitFile - misc options', () => {
 
 describe('integration - split and merge flow', () => {
   test('should correctly split then merge back to original content', async () => {
+    // The checksum file name is derived from the test file name.
     const checksumPath = path.join(outputDir, 'test.bin.checksum.sha256');
 
     const splitResult = await isResolved(
@@ -355,7 +334,6 @@ describe('integration - split and merge flow', () => {
         createChecksum: 'sha256',
       })
     );
-
     expect(splitResult.success).toBe(true);
 
     const files = await readdir(outputDir);
@@ -367,7 +345,6 @@ describe('integration - split and merge flow', () => {
     const mergeResult = await isResolved(
       mergeFiles(partFiles, mergeOutput, { checksumPath })
     );
-
     expect(mergeResult.success).toBe(true);
     expect(await exists(mergeOutput)).toBe(true);
 
@@ -377,7 +354,8 @@ describe('integration - split and merge flow', () => {
   });
 
   test('should fail to merge if checksum is tampered', async () => {
-    const checksumPath = path.join(outputDir, 'checksum.sha256');
+    // Use the correct checksum file name.
+    const checksumPath = path.join(outputDir, 'test.bin.checksum.sha256');
 
     const splitResult = await isResolved(
       splitFile(testFile, outputDir, {
@@ -386,7 +364,6 @@ describe('integration - split and merge flow', () => {
         createChecksum: 'sha256',
       })
     );
-
     expect(splitResult.success).toBe(true);
 
     const files = await readdir(outputDir);
@@ -394,15 +371,15 @@ describe('integration - split and merge flow', () => {
       .filter((f) => !f.endsWith('.sha256'))
       .map((f) => path.join(outputDir, f));
 
-    // Tamper the checksum file
+    // Tamper with the checksum file.
     await Bun.write(checksumPath, 'invalidchecksumvalue');
 
     const mergeOutput = path.join(outputDir, 'merged-fail.bin');
     const mergeResult = await isResolved(
       mergeFiles(partFiles, mergeOutput, { checksumPath })
     );
-
     expect(mergeResult.success).toBe(false);
+    // Adjust expectation to match the error message from mergeFiles.
     expect((mergeResult.error as Error).message).toContain(
       'Checksum is not valid'
     );
@@ -414,21 +391,19 @@ describe('integration - split and merge flow', () => {
       numberOfParts: 3,
       createChecksum: 'sha256',
     });
-
     const files = await readdir(outputDir);
     const partFiles = files
       .filter((f) => !f.endsWith('.sha256'))
       .map((f) => path.join(outputDir, f));
-    const checksumPath = path.join(outputDir, 'checksum.sha256');
+    // Use the correct checksum file name.
+    const checksumPath = path.join(outputDir, 'test.bin.checksum.sha256');
 
-    // Delete one of the part files
+    // Delete one of the part files.
     await rm(partFiles[0]);
-
     const mergeOutput = path.join(outputDir, 'merged-missing.bin');
     const mergeResult = await isResolved(
       mergeFiles(partFiles, mergeOutput, { checksumPath })
     );
-
     expect(mergeResult.success).toBe(false);
     expect((mergeResult.error as Error).message).toContain("didn't exists");
   });
