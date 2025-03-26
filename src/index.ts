@@ -38,8 +38,8 @@ function formatPartIndex(index: number): string {
  * @param {string} inputFilePath - Path to the input file to be split.
  * @param {string} outputPath - Directory where the output files will be saved.
  * @param {SplitFileOptions} options - Configuration options for splitting the file.
- * @param {('number'|'size')} options.splitBy - Determines whether to split by number of parts or by part size.
- * @param {number} [options.numberOfParts] - Required when splitBy is 'number'. Specifies how many parts the file will be split into.
+ * @param {('numberOfParts'|'size')} options.splitBy - Determines whether to split by number of parts or by part size.
+ * @param {number} [options.numberOfParts] - Required when splitBy is 'numberOfParts'. Specifies how many parts the file will be split into.
  * @param {number} [options.partSize] - Required when splitBy is 'size'. Specifies the size of each part in bytes.
  * @param {SupportedCryptoAlgorithms} [options.createChecksum] - Optional. Create a checksum file using the specified algorithm. Defaults to 'sha256' when set.
  * @param {('distribute'|'createNewFile')} [options.extraBytesHandling='distribute'] - Optional. Determines how to handle remaining bytes:
@@ -70,7 +70,8 @@ export async function splitFile(
     }
 
     if (
-      (options.splitBy === 'number' && !Number.isInteger(options.numberOfParts)) ||
+      (options.splitBy === 'numberOfParts' &&
+        !Number.isInteger(options.numberOfParts)) ||
       (options.splitBy === 'size' && !Number.isInteger(options.partSize))
     ) {
       throw new Error('Part size and number of parts should be an integer');
@@ -89,7 +90,7 @@ export async function splitFile(
     let partSize: number;
     let totalParts: number;
 
-    if (options.splitBy === 'number') {
+    if (options.splitBy === 'numberOfParts') {
       if (options.numberOfParts < 1) {
         throw new Error('Number of parts cannot be zero or negative');
       }
@@ -116,15 +117,13 @@ export async function splitFile(
     if (extraBytesHandling === 'createNewFile' && extraBytes > 0) {
       totalParts++;
     }
-    const partSizes: number[] = [];
+    const partSizes: number[] = new Array<number>(totalParts).fill(partSize);
     const baseExtra = Math.floor(extraBytes / totalParts);
     let remainder = extraBytes % totalParts;
-    for (let i = 0; i < totalParts; i++) {
-      partSizes[i] =
-        partSize +
-        (extraBytesHandling === 'distribute'
-          ? baseExtra + (remainder-- > 0 ? 1 : 0)
-          : 0);
+    if (extraBytes > 0 && extraBytesHandling === 'distribute') {
+      for (let i = 0; i < totalParts; i++) {
+        partSizes[i] += baseExtra + (remainder-- > 0 ? 1 : 0);
+      }
     }
 
     const partName = `${fileName}.${formatPartIndex(currentPart)}`;
@@ -151,13 +150,13 @@ export async function splitFile(
         );
 
         writer.write(chunk.subarray(chunkOffset, chunkOffset + bytesToWrite));
-        await writer.flush()
-        
+        await writer.flush();
+
         currentSize += bytesToWrite;
         chunkOffset += bytesToWrite;
 
         if (currentPart < totalParts && currentSize >= expectedSize) {
-          await writer.end()
+          await writer.end();
           currentPart++;
           partPath = path.join(
             outputPath,
@@ -211,6 +210,8 @@ export async function mergeFiles(
 ): Promise<void> {
   try {
     const parentDir = path.dirname(outputFilePath);
+    const compareChecksum = options?.checksumPath ?? null;
+
     if (!existsSync(parentDir)) {
       await mkdir(parentDir, { recursive: true });
     }
@@ -222,8 +223,8 @@ export async function mergeFiles(
     let checksumAlg: SupportedCryptoAlgorithms | null = null;
     let hasher: CryptoHasher | null = null;
 
-    if (options?.checksumPath) {
-      const ext = options.checksumPath.split('.').at(-1);
+    if (compareChecksum) {
+      const ext = compareChecksum.split('.').at(-1);
       if (!ext) {
         throw new Error('Checksum file is included, but not valid');
       }
@@ -268,7 +269,7 @@ export async function mergeFiles(
       const readStream: ReadableStream<Uint8Array> = part.stream();
 
       for await (const chunk of readStream) {
-        if (options?.checksumPath && hasher) {
+        if (compareChecksum && hasher) {
           hasher.update(chunk);
         }
 
@@ -284,8 +285,8 @@ export async function mergeFiles(
 
     await writer.end();
 
-    if (options?.checksumPath && hasher) {
-      const originalChecksum = await Bun.file(options.checksumPath).text();
+    if (compareChecksum && hasher) {
+      const originalChecksum = await Bun.file(compareChecksum).text();
       const checksum = hasher.digest('hex');
 
       if (originalChecksum !== checksum) {

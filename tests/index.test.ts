@@ -8,7 +8,7 @@ import {
   expect,
   test,
 } from 'bun:test';
-import { mergeFiles, splitFile } from '../src/index';
+import { mergeFiles, splitFile } from '../dist/index.js';
 
 const outputDir = path.resolve(__dirname, './output');
 const inputDir = path.resolve(__dirname, './input');
@@ -81,7 +81,7 @@ describe('splitFile - file splitting and checksums', () => {
 
     const result = await isResolved(
       splitFile(testFile, outputDir, {
-        splitBy: 'number',
+        splitBy: 'numberOfParts',
         numberOfParts: numberOfParts,
         createChecksum: 'sha256',
       })
@@ -109,7 +109,7 @@ describe('splitFile - file splitting and checksums', () => {
     // Verify error when zero parts is provided
     const zeroPartsResult = await isResolved(
       splitFile(testFile, outputDir, {
-        splitBy: 'number',
+        splitBy: 'numberOfParts',
         numberOfParts: 0,
         createChecksum: 'sha256',
       })
@@ -194,7 +194,7 @@ describe('splitFile - error handling', () => {
     const nonExistentFile = path.join(inputDir, 'doesNotExist.bin');
     const result = await isResolved(
       splitFile(nonExistentFile, outputDir, {
-        splitBy: 'number',
+        splitBy: 'numberOfParts',
         numberOfParts: 2,
       })
     );
@@ -208,7 +208,7 @@ describe('splitFile - error handling', () => {
     await Bun.write(emptyFile, '');
     const result = await isResolved(
       splitFile(emptyFile, outputDir, {
-        splitBy: 'number',
+        splitBy: 'numberOfParts',
         numberOfParts: 2,
       })
     );
@@ -220,7 +220,7 @@ describe('splitFile - error handling', () => {
   test('should throw error when using non-integer number of parts', async () => {
     const result = await isResolved(
       splitFile(testFile, outputDir, {
-        splitBy: 'number',
+        splitBy: 'numberOfParts',
         numberOfParts: 2.5,
       })
     );
@@ -280,7 +280,7 @@ describe('splitFile - error handling', () => {
     await Bun.write(smallFile, Buffer.alloc(10, 1));
     const result = await isResolved(
       splitFile(smallFile, outputDir, {
-        splitBy: 'number',
+        splitBy: 'numberOfParts',
         numberOfParts: 11,
       })
     );
@@ -297,7 +297,7 @@ describe('splitFile - misc options', () => {
     const nonExistentOutputDir = path.join(outputDir, 'nested', 'output');
     const result = await isResolved(
       splitFile(testFile, nonExistentOutputDir, {
-        splitBy: 'number',
+        splitBy: 'numberOfParts',
         numberOfParts: 2,
       })
     );
@@ -312,7 +312,7 @@ describe('splitFile - misc options', () => {
     await Bun.write(tempFile, Buffer.alloc(1024, 1));
     const result = await isResolved(
       splitFile(tempFile, outputDir, {
-        splitBy: 'number',
+        splitBy: 'numberOfParts',
         numberOfParts: 2,
         deleteFileAfterSplit: true,
       })
@@ -329,7 +329,7 @@ describe('integration - split and merge flow', () => {
 
     const splitResult = await isResolved(
       splitFile(testFile, outputDir, {
-        splitBy: 'number',
+        splitBy: 'numberOfParts',
         numberOfParts: 4,
         createChecksum: 'sha256',
       })
@@ -359,7 +359,7 @@ describe('integration - split and merge flow', () => {
 
     const splitResult = await isResolved(
       splitFile(testFile, outputDir, {
-        splitBy: 'number',
+        splitBy: 'numberOfParts',
         numberOfParts: 3,
         createChecksum: 'sha256',
       })
@@ -387,7 +387,7 @@ describe('integration - split and merge flow', () => {
 
   test('should fail to merge if one of the parts is deleted', async () => {
     await splitFile(testFile, outputDir, {
-      splitBy: 'number',
+      splitBy: 'numberOfParts',
       numberOfParts: 3,
       createChecksum: 'sha256',
     });

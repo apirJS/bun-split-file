@@ -32,7 +32,7 @@ await splitFile('./input/video.mp4', './chunks', {
 
 // Split into specific number of parts
 await splitFile('./input/large-dataset.csv', './parts', {
-  splitBy: 'number',
+  splitBy: 'numberOfParts',
   numberOfParts: 5,
   createChecksum: 'sha256',
   deleteFileAfterSplit: true, // remove original after splitting
@@ -40,13 +40,13 @@ await splitFile('./input/large-dataset.csv', './parts', {
 
 // Distribute extra bytes to an additional file
 await splitFile('./input/large-dataset.csv', './parts', {
-  splitBy: 'number',
+  splitBy: 'numberOfParts',
   numberOfParts: 5,
   extraBytesHandling: 'newFile',
 });
 ```
 
-### Merge Files Back
+### Merge Files
 
 ```ts
 import { mergeFiles } from 'bun-split-file';
@@ -65,13 +65,6 @@ await mergeFiles(
 );
 ```
 
-### NodeJS support
-
-```ts
-// will work on nodejs runtime
-import { mergeFiles, splitFile } from 'bun-split-file/node';
-```
-
 ---
 
 ## API Reference
@@ -80,8 +73,8 @@ import { mergeFiles, splitFile } from 'bun-split-file/node';
 
 | Option                 | Type                                | Description                                                                                                                                        |
 | ---------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `splitBy`              | `'number'` or `'size'`              | How to split the file                                                                                                                              |
-| `numberOfParts`        | `number`                            | Required if `splitBy = 'number'`                                                                                                                   |
+| `splitBy`              | `'numberOfParts'` or `'size'`              | How to split the file                                                                                                                              |
+| `numberOfParts`        | `number`                            | Required if `splitBy = 'numberOfParts'`                                                                                                                   |
 | `partSize`             | `number`                            | Required if `splitBy = 'size'`                                                                                                                     |
 | `createChecksum`       | `SupportedCryptoAlgorithms`         | Optional hash (e.g., `'sha256'`) - [Supported algorithms](https://bun.sh/docs/api/hashing#bun-cryptohasher)                                        |
 | `extraBytesHandling`   | `'distribute'` or `'createNewFile'` | Optional. `distribute`: Distributes extra bytes across parts `createNewFile`: Creates an additional file for remaining bytes. Default `distribute` |
@@ -96,7 +89,7 @@ import { mergeFiles, splitFile } from 'bun-split-file/node';
 
 ---
 
-## Output Example
+## Output Examples
 
 ### Splitting Files
 
@@ -106,7 +99,7 @@ When splitting a 25MB file into 3 parts with the `distribute` option:
 
 ```ts
 await splitFile('./input/data.bin', './chunks', {
-  splitBy: 'number',
+  splitBy: 'numberOfParts',
   numberOfParts: 3,
   createChecksum: 'sha256',
   extraBytesHandling: 'distribute', // distribute extra bytes across parts
@@ -130,7 +123,7 @@ When splitting a 25MB file into 3 parts with the `newFile` option:
 
 ```ts
 await splitFile('./input/data.bin', './chunks', {
-  splitBy: 'number',
+  splitBy: 'numberOfParts',
   numberOfParts: 3,
   createChecksum: 'sha256',
   extraBytesHandling: 'newFile', // put extra bytes in a new file
@@ -167,6 +160,9 @@ Output: ./output/video-restored.mp4 (25MB)
 
 ---
 
-## License
+## Author
+github.com/apirJS
 
+---
+## License
 MIT © 2025 apirJS

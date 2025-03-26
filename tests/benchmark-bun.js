@@ -49,7 +49,7 @@ async function runBenchmark() {
     // Measure bun-split-file
     const bunStart = performance.now();
     await splitFile(filePath, outputDir, {
-      splitBy: 'number',
+      splitBy: 'numberOfParts',
       numberOfParts: 10,
     });
     const bunEnd = performance.now();
@@ -72,6 +72,8 @@ async function runBenchmark() {
       await rm(outputDir, { recursive: true, force: true });
       await mkdir(outputDir, { recursive: true });
     }
+
+    
   }
 
   const bunAvg = bunTotalTime / iterations;

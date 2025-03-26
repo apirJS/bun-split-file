@@ -2,7 +2,7 @@ import type { SupportedCryptoAlgorithms } from 'bun';
 
 export type SplitFileOptions = (
   | {
-      splitBy: 'number';
+      splitBy: 'numberOfParts';
       numberOfParts: number;
     }
   | {
