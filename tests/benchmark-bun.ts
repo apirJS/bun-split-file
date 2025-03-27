@@ -1,11 +1,11 @@
 import { existsSync } from 'node:fs';
-import { mkdir, rm } from 'node:fs/promises';
+import { mkdir, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import sf from 'split-file';
-import { splitFile } from '../dist/index.js';
+import { mergeFiles, splitFile } from '../dist/index.js';
 
-const inputDir = path.resolve('./input');
-const outputDir = path.resolve('./output');
+const inputDir = path.join(__dirname, 'input');
+const outputDir = path.join(__dirname, 'output');
 const fileName = 'test.bin';
 const filePath = path.resolve(inputDir, fileName);
 
@@ -33,7 +33,7 @@ async function createDir() {
   }
 }
 
-async function runBenchmark() {
+async function benchmark1() {
   await createDir();
   await createFile();
 
@@ -52,8 +52,15 @@ async function runBenchmark() {
       splitBy: 'numberOfParts',
       numberOfParts: 10,
     });
+    const bunParts = (await readdir(outputDir)).map((f) =>
+      path.join(outputDir, f)
+    );
+    const bunMergeResult = path.join(outputDir, 'bun-merged.bin');
+    await mergeFiles(bunParts, bunMergeResult);
+
     const bunEnd = performance.now();
     const bunDuration = bunEnd - bunStart;
+
     bunTotalTime += bunDuration;
     console.log(`bun-split-file:   ${bunDuration.toFixed(2)} ms`);
 
@@ -61,19 +68,25 @@ async function runBenchmark() {
     await mkdir(outputDir, { recursive: true });
 
     // Measure split-file
-    const splitStart = performance.now();
-    await sf.splitFile(filePath, 10, outputDir); // eslint-disable-line
-    const splitEnd = performance.now();
-    const splitDuration = splitEnd - splitStart;
-    splitFileTotalTime += splitDuration;
-    console.log(`split-file:       ${splitDuration.toFixed(2)} ms`);
+    const sfStart = performance.now();
+    await sf.splitFile(filePath, 10, outputDir);
+
+    const sfParts = (await readdir(outputDir)).map((f) =>
+      path.join(outputDir, f)
+    );
+    const sfMergeResult = path.join(outputDir, 'sf-merged.bin');
+    await sf.mergeFiles(sfParts, sfMergeResult);
+
+    const sfEnd = performance.now();
+    const sfDuration = sfEnd - sfStart;
+
+    splitFileTotalTime += sfDuration;
+    console.log(`split-file:       ${sfDuration.toFixed(2)} ms`);
 
     if (i < iterations - 1) {
       await rm(outputDir, { recursive: true, force: true });
       await mkdir(outputDir, { recursive: true });
     }
-
-    
   }
 
   const bunAvg = bunTotalTime / iterations;
@@ -86,4 +99,4 @@ async function runBenchmark() {
   await removeDir();
 }
 
-runBenchmark().catch(console.error);
+benchmark1().catch(console.error);

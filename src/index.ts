@@ -217,7 +217,7 @@ export async function mergeFiles(
     }
 
     if (inputFilePaths.length === 0) {
-      throw new Error('Input files is empty');
+      throw new Error('Input files list is empty');
     }
 
     let checksumAlg: SupportedCryptoAlgorithms | null = null;
@@ -225,32 +225,22 @@ export async function mergeFiles(
 
     if (compareChecksum) {
       const ext = compareChecksum.split('.').at(-1);
-      if (!ext) {
-        throw new Error('Checksum file is included, but not valid');
-      }
-
-      if (!SUPPORTED_HASH_ALG.includes(ext)) {
+      if (!ext || !SUPPORTED_HASH_ALG.includes(ext)) {
         throw new Error(
-          'Provided checksum file has an invalid checksum algorithm'
+          'Provided checksum file has an invalid or unsupported extension'
         );
       }
-
       checksumAlg = ext as SupportedCryptoAlgorithms;
       hasher = new Bun.CryptoHasher(checksumAlg);
     }
 
     const files = inputFilePaths.sort((a, b) => {
-      const ai = a.split('.').at(-1);
-      const bi = b.split('.').at(-1);
-
-      if (!ai) {
-        throw new Error(`Invalid part's format: ${a}`);
-      }
-
-      if (!bi) {
-        throw new Error(`Invalid part's format: ${b}`);
-      }
-      return parseInt(a, 10) - parseInt(b, 10);
+      const extractNumber = (file: string) => {
+        const regex = /(\d+)(?=\.\w+$|$)/;
+        const match = regex.exec(file); // Capture numeric part before extension
+        return match ? parseInt(match[0], 10) : Number.MAX_SAFE_INTEGER;
+      };
+      return extractNumber(a) - extractNumber(b);
     });
 
     const writer = Bun.file(outputFilePath).writer();
@@ -259,43 +249,42 @@ export async function mergeFiles(
       const part = Bun.file(f);
 
       if (!(await part.exists())) {
-        throw new Error(`[${f}] didn't exists`);
+        throw new Error(`File part [${f}] does not exist`);
       }
 
       if (part.size === 0) {
-        throw new Error(`[${f}] is empty`);
+        throw new Error(`File part [${f}] is empty`);
       }
 
       const readStream: ReadableStream<Uint8Array> = part.stream();
-
       for await (const chunk of readStream) {
-        if (compareChecksum && hasher) {
-          hasher.update(chunk);
-        }
-
+        if (hasher) hasher.update(chunk);
         writer.write(chunk);
-      }
-
-      await writer.flush();
-
-      if (options?.deletePartsAfterMerge) {
-        await part.delete();
+        await writer.flush();
       }
     }
 
     await writer.end();
 
-    if (compareChecksum && hasher) {
-      const originalChecksum = await Bun.file(compareChecksum).text();
-      const checksum = hasher.digest('hex');
+    if (hasher && compareChecksum) {
+      const originalChecksum = (await Bun.file(compareChecksum).text()).trim();
+      const computed = hasher.digest('hex');
 
-      if (originalChecksum !== checksum) {
-        throw new Error('Checksum is not valid');
+      if (originalChecksum !== computed) {
+        throw new Error(
+          `Checksum mismatch: expected ${originalChecksum}, got ${computed}`
+        );
+      }
+    }
+
+    if (options?.deletePartsAfterMerge) {
+      for (const f of files) {
+        await Bun.file(f).delete();
       }
     }
   } catch (error) {
     throw new Error(
-      `Failed to split the file: ${
+      `Failed to merge the file: ${
         error instanceof Error ? error.message : 'Unknown error'
       }`,
       { cause: error }
