@@ -381,7 +381,7 @@ describe('integration - split and merge flow', () => {
     expect(mergeResult.success).toBe(false);
     // Adjust expectation to match the error message from mergeFiles.
     expect((mergeResult.error as Error).message).toContain(
-      'Checksum is not valid'
+      'Checksum mismatch'
     );
   });
 
@@ -405,6 +405,6 @@ describe('integration - split and merge flow', () => {
       mergeFiles(partFiles, mergeOutput, { checksumPath })
     );
     expect(mergeResult.success).toBe(false);
-    expect((mergeResult.error as Error).message).toContain("didn't exists");
+    expect((mergeResult.error as Error).message).toContain("does not exist");
   });
 });
