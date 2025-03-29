@@ -11,7 +11,7 @@ Split files into parts and safely merge them back — with optional checksum ver
 bun add bun-split-file
 ```
 
-> Requires **Bun** runtime (https://bun.sh)
+> Requires **Bun** (https://bun.sh)
 
 ---
 
