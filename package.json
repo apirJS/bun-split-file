@@ -20,7 +20,7 @@
     "build": "bun src/build.ts",
     "release": "bun run build && changeset publish"
   },
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "Split and merge files with Bun",
   "directories": {
     "test": "tests"
@@ -41,5 +41,8 @@
     "url": "https://github.com/apirJS/bun-split-file/issues"
   },
   "homepage": "https://github.com/apirJS/bun-split-file#readme",
-  "files": ["dist", "README.md"]
+  "files": [
+    "dist",
+    "README.md"
+  ]
 }
