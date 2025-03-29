@@ -1,4 +1,4 @@
-name: Run lint and tests
+name: CI
 
 on:
   push: 
@@ -9,13 +9,12 @@ on:
 jobs:
   lint-test:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.2.0
-      - run: bun install
+      - run: bun install --frozen-lockfile
       - run: bun src/build.ts
       - run: bun run lint
       - run: bun test

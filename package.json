@@ -1,8 +1,8 @@
 {
   "name": "bun-split-file",
   "type": "module",
-  "main": "src/index.ts",
-  "types": "./src/types.d.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "devDependencies": {
     "@eslint/js": "^9.23.0",
     "@stylistic/eslint-plugin": "^4.2.0",
@@ -16,9 +16,10 @@
   },
   "scripts": {
     "lint": "eslint src",
-    "build": "bun src/build.ts"
+    "build": "bun src/build.ts",
+    "publish": "bun run build && changeset publish"
   },
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Split and merge files with Bun",
   "directories": {
     "test": "tests"
@@ -38,5 +39,6 @@
   "bugs": {
     "url": "https://github.com/apirJS/bun-split-file/issues"
   },
-  "homepage": "https://github.com/apirJS/bun-split-file#readme"
+  "homepage": "https://github.com/apirJS/bun-split-file#readme",
+  "files": ["dist", "README.md"]
 }

@@ -1,7 +1,7 @@
 # bun-split-file
 
 **File splitter and merger for Bun**  
-Split files into parts and safely merge them back — with optional checksum verification and flexible part-size logic.
+A faster way to split files into parts and safely merge them back with Bun — with optional checksum verification and flexible part-size logic.
 
 ---
 
