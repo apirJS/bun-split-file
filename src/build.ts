@@ -7,11 +7,3 @@ await Bun.build({
   target: 'bun',
   minify: true,
 });
-
-await Bun.build({
-  entrypoints: ['./src/index.ts'],
-  outdir: './dist/node',
-  plugins: [dts()],
-  target: 'node',
-  minify: true,
-});

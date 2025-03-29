@@ -6,7 +6,7 @@
       "ESNext.AsyncIterable"
       
     ],
-    "types": ["bun-types", "@types/bun"], 
+    "types": ["@types/bun"], 
     "target": "ESNext",
     "module": "ESNext",
     "moduleDetection": "force",

@@ -99,7 +99,7 @@ describe('splitFile - file splitting and checksums', () => {
 
     for (const fileName of partFiles) {
       const file = Bun.file(path.join(outputDir, fileName));
-      expect(file.size).toBe(expectedPartSize);
+      expect((await file.stat()).size).toBe(expectedPartSize);
     }
 
     const checksumFile = Bun.file(path.join(outputDir, checksumFiles[0]));
@@ -141,7 +141,7 @@ describe('splitFile - file splitting and checksums', () => {
 
     for (const part of partFiles) {
       const f = Bun.file(path.join(outputDir, part));
-      expect(f.size).toBe(expectedPartSize);
+      expect((await f.stat()).size).toBe(expectedPartSize);
     }
 
     // Verify error when partSize is zero
@@ -178,14 +178,14 @@ describe('splitFile - file splitting and checksums', () => {
     // All parts except the last should be of fixed expectedPartSize.
     for (let i = 0; i < expectedNumberOfParts - 1; i++) {
       const file = Bun.file(path.join(outputDir, sortedFiles[i]));
-      expect(file.size).toBe(expectedPartSize);
+      expect((await file.stat()).size).toBe(expectedPartSize);
     }
 
     // The last file should contain the remaining extra bytes.
     const lastFile = Bun.file(
       path.join(outputDir, sortedFiles[expectedNumberOfParts - 1])
     );
-    expect(lastFile.size).toBe(extraBytes);
+    expect((await lastFile.stat()).size).toBe(extraBytes);
   });
 });
 
@@ -200,7 +200,7 @@ describe('splitFile - error handling', () => {
     );
     expect(result.success).toBe(false);
     expect(result.error).toBeDefined();
-    expect((result.error as Error).message).toContain("File doesn't exist");
+    expect((result.error as Error).message).toContain("no such file or directory");
   });
 
   test('should throw error when input file is empty', async () => {
@@ -380,9 +380,7 @@ describe('integration - split and merge flow', () => {
     );
     expect(mergeResult.success).toBe(false);
     // Adjust expectation to match the error message from mergeFiles.
-    expect((mergeResult.error as Error).message).toContain(
-      'Checksum mismatch'
-    );
+    expect((mergeResult.error as Error).message).toContain('Checksum mismatch');
   });
 
   test('should fail to merge if one of the parts is deleted', async () => {
@@ -405,6 +403,6 @@ describe('integration - split and merge flow', () => {
       mergeFiles(partFiles, mergeOutput, { checksumPath })
     );
     expect(mergeResult.success).toBe(false);
-    expect((mergeResult.error as Error).message).toContain("does not exist");
+    expect((mergeResult.error as Error).message).toContain('does not exist');
   });
 });

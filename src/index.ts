@@ -56,6 +56,8 @@ export async function splitFile(
 ): Promise<void> {
   try {
     const file = Bun.file(inputFilePath);
+    const fileStat = await file.stat();
+    const fileSize = fileStat.size;
 
     if (!(await file.exists())) {
       throw new Error("File doesn't exists!");
@@ -65,7 +67,7 @@ export async function splitFile(
       await mkdir(outputPath, { recursive: true });
     }
 
-    if (file.size === 0) {
+    if (fileSize === 0) {
       throw new Error('File is empty!');
     }
 
@@ -77,9 +79,8 @@ export async function splitFile(
       throw new Error('Part size and number of parts should be an integer');
     }
 
-    const readStream: ReadableStream<Uint8Array> = file.stream();
+    const readStream = file.stream();
     const fileName = path.basename(inputFilePath);
-    const fileSize = file.size;
     const hashAlg = options.createChecksum ?? 'sha256';
     const hasher = options.createChecksum
       ? new Bun.CryptoHasher(hashAlg)
@@ -135,7 +136,7 @@ export async function splitFile(
       throw new Error(`Number of parts is too large`);
     }
 
-    for await (const chunk of readStream) {
+    for await (const chunk of readStream as unknown as AsyncIterable<Uint8Array>) {
       let chunkOffset = 0;
 
       if (hasher) {
@@ -234,9 +235,9 @@ export async function mergeFiles(
       hasher = new Bun.CryptoHasher(checksumAlg);
     }
 
+    const regex = /(\d+)(?=\.\w+$|$)/;
     const files = inputFilePaths.sort((a, b) => {
       const extractNumber = (file: string) => {
-        const regex = /(\d+)(?=\.\w+$|$)/;
         const match = regex.exec(file); // Capture numeric part before extension
         return match ? parseInt(match[0], 10) : Number.MAX_SAFE_INTEGER;
       };
@@ -252,12 +253,12 @@ export async function mergeFiles(
         throw new Error(`File part [${f}] does not exist`);
       }
 
-      if (part.size === 0) {
+      if ((await part.stat()).size === 0) {
         throw new Error(`File part [${f}] is empty`);
       }
 
-      const readStream: ReadableStream<Uint8Array> = part.stream();
-      for await (const chunk of readStream) {
+      const readStream = part.stream();
+      for await (const chunk of readStream as unknown as AsyncIterable<Uint8Array>) {
         if (hasher) hasher.update(chunk);
         writer.write(chunk);
         await writer.flush();
