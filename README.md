@@ -27,7 +27,7 @@ await splitFile('./input/video.mp4', './chunks', {
   splitBy: 'size',
   partSize: 10 * 1024 * 1024, // 10MB per part
   createChecksum: 'sha256',
-  extraBytesHandling: 'distribute', // distribute extra bytes across parts
+  extraBytesHandling: 'distribute', // distribute extra bytes across parts 
 });
 
 // Split into specific number of parts
