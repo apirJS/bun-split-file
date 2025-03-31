@@ -13,16 +13,22 @@ permissions:
   pull-requests: write
 
 jobs:
-  publish:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+  release:
+    name: Release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+
+      - name: Setup Bun 1.2.0
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.2.0
           registry-url: "https://registry.npmjs.org"
-      - run: bun install --frozen-lockfile
+
+      - name: Install Dependencies
+        run: bun install --frozen-lockfile
+
       - name: Create Release Pull Request or Publish to npm
         id: changesets
         uses: changesets/action@v1
