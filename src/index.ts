@@ -119,6 +119,11 @@ export async function splitFile(
       totalParts++;
     }
     const partSizes: number[] = new Array<number>(totalParts).fill(partSize);
+    const partPaths = Array(totalParts)
+      .fill(0)
+      .map((_, i) =>
+        path.join(outputPath, `${fileName}.${formatPartIndex(i + 1)}`)
+      );
     const baseExtra = Math.floor(extraBytes / totalParts);
     let remainder = extraBytes % totalParts;
     if (extraBytes > 0 && extraBytesHandling === 'distribute') {
@@ -159,10 +164,7 @@ export async function splitFile(
         if (currentPart < totalParts && currentSize >= expectedSize) {
           await writer.end();
           currentPart++;
-          partPath = path.join(
-            outputPath,
-            `${fileName}.${formatPartIndex(currentPart)}`
-          );
+          partPath = partPaths[currentPart - 1];
           writer = Bun.file(partPath).writer();
           currentSize = 0;
         }
@@ -244,20 +246,28 @@ export async function mergeFiles(
       return extractNumber(a) - extractNumber(b);
     });
 
+    const fileStats = await Promise.all(
+      inputFilePaths.map(async (f) => {
+        const file = Bun.file(f);
+        const exists = await file.exists();
+        const size = exists ? (await file.stat()).size : 0;
+        return { path: f, exists, size };
+      })
+    );
+
+    const missingFile = fileStats.find((f) => !f.exists);
+    if (missingFile)
+      throw new Error(`File part [${missingFile.path}] does not exist`);
+
+    const emptyFile = fileStats.find((f) => f.size === 0);
+    if (emptyFile) throw new Error(`File part [${emptyFile.path}] is empty`);
+
     const writer = Bun.file(outputFilePath).writer();
 
     for (const f of files) {
       const part = Bun.file(f);
-
-      if (!(await part.exists())) {
-        throw new Error(`File part [${f}] does not exist`);
-      }
-
-      if ((await part.stat()).size === 0) {
-        throw new Error(`File part [${f}] is empty`);
-      }
-
       const readStream = part.stream();
+
       for await (const chunk of readStream as unknown as AsyncIterable<Uint8Array>) {
         if (hasher) hasher.update(chunk);
         writer.write(chunk);

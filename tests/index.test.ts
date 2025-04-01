@@ -323,7 +323,7 @@ describe('splitFile - misc options', () => {
 });
 
 describe('integration - split and merge flow', () => {
-  test('should correctly split then merge back to original content', async () => {
+  test('should correctly split by number of parts then merge back to original content', async () => {
     // The checksum file name is derived from the test file name.
     const checksumPath = path.join(outputDir, 'test.bin.checksum.sha256');
 
@@ -342,6 +342,36 @@ describe('integration - split and merge flow', () => {
       .map((f) => path.join(outputDir, f));
 
     const mergeOutput = path.join(outputDir, 'merged.bin');
+    const mergeResult = await isResolved(
+      mergeFiles(partFiles, mergeOutput, { checksumPath })
+    );
+    expect(mergeResult.success).toBe(true);
+    expect(await exists(mergeOutput)).toBe(true);
+
+    const original = await Bun.file(testFile).arrayBuffer();
+    const merged = await Bun.file(mergeOutput).arrayBuffer();
+    expect(Buffer.compare(Buffer.from(original), Buffer.from(merged))).toBe(0);
+  });
+
+  test('should correctly split by size then merge back to original content', async () => {
+    const partSize = 5 * 1024 * 1024; // 5MB parts
+    const checksumPath = path.join(outputDir, 'test.bin.checksum.sha256');
+
+    const splitResult = await isResolved(
+      splitFile(testFile, outputDir, {
+        splitBy: 'size',
+        partSize: partSize,
+        createChecksum: 'sha256',
+      })
+    );
+    expect(splitResult.success).toBe(true);
+
+    const files = await readdir(outputDir);
+    const partFiles = files
+      .filter((f) => !f.endsWith('.sha256'))
+      .map((f) => path.join(outputDir, f));
+
+    const mergeOutput = path.join(outputDir, 'merged-size.bin');
     const mergeResult = await isResolved(
       mergeFiles(partFiles, mergeOutput, { checksumPath })
     );

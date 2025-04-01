@@ -1,19 +1,13 @@
 # bun-split-file
 
-## 1.0.0
+## 1.1.0
 
-### Major Changes
+### Minor Changes
 
-- First release
-
-## 2.0.0
-
-### Major Changes
-
-- First release
+- Boost performance by precaculating things and reduce overhead
 
 ## 1.0.0
 
 ### Major Changes
 
-- 29130e0: First publish
+- First release

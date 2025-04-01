@@ -15,6 +15,28 @@ bun add bun-split-file
 
 ---
 
+### Performance compared to existing package: `split-file`
+```
+Tested On
+runtime: Bun 1.2.8
+Iterations: 10
+test-file's size: 100 MB
+disk: SSD 
+
+Average bun‑split‑file 
+(split by number of parts + merge): 460.94 ms
+Average split‑file 
+(split by number of parts + merge): 914.72 ms
+
+Average bun‑split‑file 
+(split by size + merge): 473.74 ms
+Average split‑file 
+(split by size + merge): 939.21 ms
+```
+
+
+---
+
 ### Split a File
 
 Split files in multiple ways to match your needs
