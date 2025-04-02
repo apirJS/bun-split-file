@@ -42,9 +42,9 @@ function formatPartIndex(index: number): string {
  * @param {number} [options.numberOfParts] - Required when splitBy is 'numberOfParts'. Specifies how many parts the file will be split into.
  * @param {number} [options.partSize] - Required when splitBy is 'size'. Specifies the size of each part in bytes.
  * @param {SupportedCryptoAlgorithms} [options.createChecksum] - Optional. Create a checksum file using the specified algorithm. Defaults to 'sha256' when set.
- * @param {('distribute'|'createNewFile')} [options.extraBytesHandling='distribute'] - Optional. Determines how to handle remaining bytes:
+ * @param {('distribute'|'newFile')} [options.extraBytesHandling='distribute'] - Optional. Determines how to handle remaining bytes:
  *   - 'distribute': Distributes extra bytes across parts
- *   - 'createNewFile': Creates an additional file for remaining bytes
+ *   - 'newFile': Creates an additional file for remaining bytes
  * @param {boolean} [options.deleteFileAfterSplit] - Optional. Whether to delete the original file after splitting.
  * @returns {Promise<void>} A promise that resolves when the file has been successfully split.
  * @throws {Error} If the file doesn't exist, is empty, or if options are invalid.
@@ -115,7 +115,7 @@ export async function splitFile(
 
     // Pre-calculate partSize
     const extraBytes = fileSize % partSize;
-    if (extraBytesHandling === 'createNewFile' && extraBytes > 0) {
+    if (extraBytesHandling === 'newFile' && extraBytes > 0) {
       totalParts++;
     }
     const partSizes: number[] = new Array<number>(totalParts).fill(partSize);

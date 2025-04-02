@@ -9,13 +9,14 @@ const inputDir = path.join(__dirname, 'input');
 const outputDir = path.join(__dirname, 'output');
 const fileName = 'test.bin';
 const filePath = path.resolve(inputDir, fileName);
+const PART_SIZE = 10 * 1024 * 1024
 
 /**
  * Creates a 100 MB test file filled with zeros.
  * This file will be used as the input for our benchmarks.
  */
 async function createTestFile() {
-  const fileSize = 100 * 1024 * 1024; // 100 MB
+  const fileSize = 250 * 1024 * 1024; // 100 MB
   const fileBuffer = Buffer.alloc(fileSize, 0);
   await Bun.write(filePath, fileBuffer);
 }
@@ -81,7 +82,7 @@ async function benchmarkSplitBySizeComparison() {
     const bunStart = performance.now();
     await splitFile(filePath, outputDir, {
       splitBy: 'size',
-      partSize: 10 * 1024 * 1024, // 10 MB chunks
+      partSize: PART_SIZE, // 10 MB chunks
     });
     const bunEnd = performance.now();
     const bunDuration = bunEnd - bunStart;
@@ -93,7 +94,7 @@ async function benchmarkSplitBySizeComparison() {
     const sfStart = performance.now();
     // sf.splitFileBySize splits the file into parts based on max size per part.
     // The call signature is: sf.splitFileBySize(file: string, maxSize: number, destination?: string)
-    await sf.splitFileBySize(filePath, 10 * 1024 * 1024, outputDir);
+    await sf.splitFileBySize(filePath, PART_SIZE, outputDir);
     const sfEnd = performance.now();
     const sfDuration = sfEnd - sfStart;
     sfTotalTime += sfDuration;
@@ -258,7 +259,7 @@ async function benchmarkSplitBySizeAndMergeComparison() {
   const iterations = 10;
   let bunTotalTime = 0;
   let sfTotalTime = 0;
-  const partSize = 10 * 1024 * 1024; // 10 MB chunks
+  const partSize = PART_SIZE; // 10 MB chunks
 
   // Prepare environment
   await cleanDirs();

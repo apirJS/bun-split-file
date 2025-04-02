@@ -8,7 +8,7 @@ import {
   expect,
   test,
 } from 'bun:test';
-import { mergeFiles, splitFile } from '../dist/index.js';
+import { mergeFiles, splitFile } from '../src/index.js';
 
 const outputDir = path.resolve(__dirname, './output');
 const inputDir = path.resolve(__dirname, './input');
@@ -156,17 +156,17 @@ describe('splitFile - file splitting and checksums', () => {
     expect(zeroPartSizeResult.error).toBeDefined();
   });
 
-  test('should create an additional file for remaining bytes when using "createNewFile"', async () => {
+  test('should create an additional file for remaining bytes when using "newFile"', async () => {
     const expectedPartSize = 11 * 1024 * 1024; // 11 MB
     const extraBytes = FILE_SIZE % expectedPartSize;
-    // In createNewFile mode, an extra file is created for the remaining bytes.
+    // In newFile mode, an extra file is created for the remaining bytes.
     const expectedNumberOfParts = Math.ceil(FILE_SIZE / expectedPartSize);
 
     const result = await isResolved(
       splitFile(testFile, outputDir, {
         splitBy: 'size',
         partSize: expectedPartSize,
-        extraBytesHandling: 'createNewFile',
+        extraBytesHandling: 'newFile',
       })
     );
 
