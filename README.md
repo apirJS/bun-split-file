@@ -92,7 +92,7 @@ await mergeFiles(
 | `numberOfParts`        | `number`                            | Required if `splitBy = 'numberOfParts'`                                                                                                                   |
 | `partSize`             | `number`                            | Required if `splitBy = 'size'`                                                                                                                     |
 | `createChecksum`       | `SupportedCryptoAlgorithms`         | Optional hash (e.g., `'sha256'`) - [Supported algorithms](https://bun.sh/docs/api/hashing#bun-cryptohasher)                                        |
-| `extraBytesHandling`   | `'distribute'` or `'createNewFile'` | Optional. `distribute`: Distributes extra bytes across parts `createNewFile`: Creates an additional file for remaining bytes. Default `distribute` |
+| `extraBytesHandling`   | `'distribute'` or `'newFile'` | Optional. `distribute`: Distributes extra bytes across parts `newFile`: Creates an additional file for remaining bytes. Default `distribute` |
 | `deleteFileAfterSplit` | `boolean`                           | Optional. Delete original file after split, default `false`                                                                                        |
 
 ### `mergeFiles(inputFilePaths, outputFilePath, options?)`
