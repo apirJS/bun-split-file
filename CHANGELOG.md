@@ -1,5 +1,11 @@
 # bun-split-file
 
+## 1.2.0
+
+### Minor Changes
+
+- extraBytesHandling: "newFile" -> extraBytesHandling: "createNewFile".
+
 ## 1.1.1
 
 ### Patch Changes

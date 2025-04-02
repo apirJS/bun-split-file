@@ -11,7 +11,7 @@ export type SplitFileOptions = (
     }
 ) & {
   createChecksum?: SupportedCryptoAlgorithms;
-  extraBytesHandling?: 'distribute' | 'newFile';
+  extraBytesHandling?: 'distribute' | 'createNewFile';
   deleteFileAfterSplit?: boolean;
 };
 

@@ -156,17 +156,17 @@ describe('splitFile - file splitting and checksums', () => {
     expect(zeroPartSizeResult.error).toBeDefined();
   });
 
-  test('should create an additional file for remaining bytes when using "newFile"', async () => {
+  test('should create an additional file for remaining bytes when using "createNewFile"', async () => {
     const expectedPartSize = 11 * 1024 * 1024; // 11 MB
     const extraBytes = FILE_SIZE % expectedPartSize;
-    // In newFile mode, an extra file is created for the remaining bytes.
+    // In createNewFile mode, an extra file is created for the remaining bytes.
     const expectedNumberOfParts = Math.ceil(FILE_SIZE / expectedPartSize);
 
     const result = await isResolved(
       splitFile(testFile, outputDir, {
         splitBy: 'size',
         partSize: expectedPartSize,
-        extraBytesHandling: 'newFile',
+        extraBytesHandling: 'createNewFile',
       })
     );
 
