@@ -1,5 +1,11 @@
 # bun-split-file
 
+## 1.2.1
+
+### Patch Changes
+
+- fix: relative path issues now solved
+
 ## 1.2.0
 
 ### Minor Changes

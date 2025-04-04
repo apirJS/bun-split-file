@@ -25,6 +25,12 @@ const SUPPORTED_HASH_ALG = [
   'shake256',
 ];
 
+function resolvePath(inputPath: string): string {
+  return path.isAbsolute(inputPath)
+    ? inputPath
+    : path.resolve(process.cwd(), inputPath);
+}
+
 function formatPartIndex(index: number): string {
   const indexStr = `${index}`;
   return `${'0'.repeat(
@@ -55,6 +61,9 @@ export async function splitFile(
   options: SplitFileOptions
 ): Promise<void> {
   try {
+    inputFilePath = resolvePath(inputFilePath);
+    outputPath = resolvePath(outputPath);
+
     const file = Bun.file(inputFilePath);
     const fileStat = await file.stat();
     const fileSize = fileStat.size;
@@ -212,6 +221,9 @@ export async function mergeFiles(
   options?: MergeFilesOptions
 ): Promise<void> {
   try {
+    inputFilePaths = inputFilePaths.map((p) => resolvePath(p));
+    outputFilePath = resolvePath(outputFilePath);
+
     const parentDir = path.dirname(outputFilePath);
     const compareChecksum = options?.checksumPath ?? null;
 
