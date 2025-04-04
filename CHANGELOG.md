@@ -7,16 +7,7 @@
 - fix: relative path issues now solved
 
 ## 1.2.0
-
-### Minor Changes
-
-- extraBytesHandling: "newFile" -> extraBytesHandling: "createNewFile".
-
-## 1.1.1
-
-### Patch Changes
-
-- Typos in types.d.ts
+- Accidentally renamed an argument (extraBytesHandling) for the splitFile function in version 1.1.1. Changed back in version 1.2.0
 
 ## 1.1.0
 
