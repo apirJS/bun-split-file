@@ -38,14 +38,26 @@ async function createFile() {
 }
 
 /**
- * Removes input and output directories.
+ * Removes input and output directories with retry for Windows EBUSY errors.
  */
-async function removeDir() {
-  if (await exists(inputDir)) {
-    await rm(inputDir, { recursive: true, force: true });
-  }
-  if (await exists(outputDir)) {
-    await rm(outputDir, { recursive: true, force: true });
+async function removeDir(retries = 3) {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      if (await exists(inputDir)) {
+        await rm(inputDir, { recursive: true, force: true });
+      }
+      if (await exists(outputDir)) {
+        await rm(outputDir, { recursive: true, force: true });
+      }
+      return;
+    } catch (error) {
+      if (
+        attempt < retries - 1 &&
+        (error as NodeJS.ErrnoException).code === 'EBUSY'
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
   }
 }
 
@@ -200,7 +212,7 @@ describe('splitFile - error handling', () => {
     );
     expect(result.success).toBe(false);
     expect(result.error).toBeDefined();
-    expect((result.error as Error).message).toContain("no such file or directory");
+    expect((result.error as Error).message).toContain("File doesn't exist");
   });
 
   test('should throw error when input file is empty', async () => {
@@ -255,7 +267,7 @@ describe('splitFile - error handling', () => {
     expect(result.success).toBe(false);
     expect(result.error).toBeDefined();
     expect((result.error as Error).message).toContain(
-      'Part size cannot bigger than file size'
+      'Part size cannot be bigger than file size'
     );
   });
 

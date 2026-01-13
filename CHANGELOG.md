@@ -7,6 +7,9 @@
 - fix: relative path issues now solved
 
 ## 1.2.0
+
+### Patch Changes
+
 - Accidentally renamed an argument (extraBytesHandling) for the splitFile function in version 1.1.1. Changed back in version 1.2.0
 
 ## 1.1.0

@@ -23,7 +23,7 @@ const SUPPORTED_HASH_ALG = [
   'sha3-512',
   'shake128',
   'shake256',
-];
+] as const;
 
 function resolvePath(inputPath: string): string {
   return path.isAbsolute(inputPath)
@@ -60,24 +60,26 @@ export async function splitFile(
   outputPath: string,
   options: SplitFileOptions
 ): Promise<void> {
+  const createdParts: string[] = [];
   try {
     inputFilePath = resolvePath(inputFilePath);
     outputPath = resolvePath(outputPath);
 
     const file = Bun.file(inputFilePath);
+
+    if (!(await file.exists())) {
+      throw new Error("File doesn't exist!");
+    }
+
     const fileStat = await file.stat();
     const fileSize = fileStat.size;
 
-    if (!(await file.exists())) {
-      throw new Error("File doesn't exists!");
+    if (fileSize === 0) {
+      throw new Error('File is empty!');
     }
 
     if (!existsSync(outputPath)) {
       await mkdir(outputPath, { recursive: true });
-    }
-
-    if (fileSize === 0) {
-      throw new Error('File is empty!');
     }
 
     if (
@@ -110,7 +112,7 @@ export async function splitFile(
     } else {
       if (options.partSize > fileSize) {
         throw new Error(
-          `Part size cannot bigger than file size: part size ${options.partSize} > file size ${fileSize}`
+          `Part size cannot be bigger than file size: part size ${options.partSize} > file size ${fileSize}`
         );
       }
 
@@ -128,11 +130,11 @@ export async function splitFile(
       totalParts++;
     }
     const partSizes: number[] = new Array<number>(totalParts).fill(partSize);
-    const partPaths = Array(totalParts)
-      .fill(0)
-      .map((_, i) =>
-        path.join(outputPath, `${fileName}.${formatPartIndex(i + 1)}`)
-      );
+
+    if (extraBytesHandling === 'createNewFile' && extraBytes > 0) {
+      partSizes[totalParts - 1] = extraBytes;
+    }
+
     const baseExtra = Math.floor(extraBytes / totalParts);
     let remainder = extraBytes % totalParts;
     if (extraBytes > 0 && extraBytesHandling === 'distribute') {
@@ -141,14 +143,18 @@ export async function splitFile(
       }
     }
 
-    const partName = `${fileName}.${formatPartIndex(currentPart)}`;
-    let partPath = path.join(outputPath, partName);
-    let writer = Bun.file(partPath).writer();
-    let currentSize = 0;
+    const getPartPath = (partIndex: number) =>
+      path.join(outputPath, `${fileName}.${formatPartIndex(partIndex)}`);
 
     if (partSize < 1) {
       throw new Error(`Number of parts is too large`);
     }
+
+    const partName = `${fileName}.${formatPartIndex(currentPart)}`;
+    let partPath = path.join(outputPath, partName);
+    createdParts.push(partPath);
+    let writer = Bun.file(partPath).writer();
+    let currentSize = 0;
 
     for await (const chunk of readStream as unknown as AsyncIterable<Uint8Array>) {
       let chunkOffset = 0;
@@ -173,7 +179,8 @@ export async function splitFile(
         if (currentPart < totalParts && currentSize >= expectedSize) {
           await writer.end();
           currentPart++;
-          partPath = partPaths[currentPart - 1];
+          partPath = getPartPath(currentPart);
+          createdParts.push(partPath);
           writer = Bun.file(partPath).writer();
           currentSize = 0;
         }
@@ -195,6 +202,17 @@ export async function splitFile(
       await Bun.write(checksumPath, checksum);
     }
   } catch (error) {
+    // Small delay to allow OS to release file handles on Windows
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    for (const partPath of createdParts) {
+      try {
+        if (existsSync(partPath)) {
+          await rm(partPath);
+        }
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
     throw new Error(
       `Failed to split the file: ${
         error instanceof Error ? error.message : 'Unknown error'
@@ -240,7 +258,10 @@ export async function mergeFiles(
 
     if (compareChecksum) {
       const ext = compareChecksum.split('.').at(-1);
-      if (!ext || !SUPPORTED_HASH_ALG.includes(ext)) {
+      if (
+        !ext ||
+        !SUPPORTED_HASH_ALG.includes(ext as (typeof SUPPORTED_HASH_ALG)[number])
+      ) {
         throw new Error(
           'Provided checksum file has an invalid or unsupported extension'
         );
@@ -250,7 +271,7 @@ export async function mergeFiles(
     }
 
     const regex = /(\d+)(?=\.\w+$|$)/;
-    const files = inputFilePaths.sort((a, b) => {
+    const sortedFiles = [...inputFilePaths].sort((a, b) => {
       const extractNumber = (file: string) => {
         const match = regex.exec(file); // Capture numeric part before extension
         return match ? parseInt(match[0], 10) : Number.MAX_SAFE_INTEGER;
@@ -259,7 +280,7 @@ export async function mergeFiles(
     });
 
     const fileStats = await Promise.all(
-      inputFilePaths.map(async (f) => {
+      sortedFiles.map(async (f) => {
         const file = Bun.file(f);
         const exists = await file.exists();
         const size = exists ? (await file.stat()).size : 0;
@@ -276,7 +297,7 @@ export async function mergeFiles(
 
     const writer = Bun.file(outputFilePath).writer();
 
-    for (const f of files) {
+    for (const f of sortedFiles) {
       const part = Bun.file(f);
       const readStream = part.stream();
 
@@ -301,7 +322,7 @@ export async function mergeFiles(
     }
 
     if (options?.deletePartsAfterMerge) {
-      for (const f of files) {
+      for (const f of sortedFiles) {
         await Bun.file(f).delete();
       }
     }
